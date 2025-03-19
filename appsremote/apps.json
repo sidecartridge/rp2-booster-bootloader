@@ -1,0 +1,137 @@
+{
+    "apps": [
+        {
+            "uuid": "44444444-4444-4444-8444-444444444444",
+            "name": "DEV APP",
+            "description": "Use this app as a template to create your own app. The UUID is the by default, do not mix.",
+            "image": "https://placehold.co/256x256/png",
+            "tags": [
+                "Development"
+            ],
+            "devices": [
+                "Atari ST",
+                "Atari STE",
+                "Atari MegaST",
+                "Atari MegaSTE"
+            ],
+            "binary": "hhttps://tosemulator.sidecartridge.com/placeholder.uf2",
+            "md5": "087904d8391bf6aa9b47945474826071",
+            "version": "0.0.1dev"
+        },
+        {
+            "uuid": "7a4ac96a-6aae-4d2b-913c-2c95893af591",
+            "name": "ROM Emulator",
+            "description": "Pure raw emulation of ROMs with a maximum of 128KBs. It can load any ROM file from the SD card or download it from the public repository in the net.",
+            "image": "https://placehold.co/256x256/png",
+            "tags": [
+                "Emulation",
+                "ROM"
+            ],
+            "devices": [
+                "Atari ST",
+                "Atari STE",
+                "Atari MegaST",
+                "Atari MegaSTE"
+            ],
+            "binary": "https://tosemulator.sidecartridge.com/SWITCHER.TOS.v2.1.0",
+            "md5": "e571e9873a3703a787884727d864f213",
+            "version": "2.0.0"
+        },
+        {
+            "uuid": "7a4ac96a-6aae-4d2b-913c-2c95893af591",
+            "name": "ROM Emulator",
+            "description": "Pure raw emulation of ROMs with a maximum of 128KBs. It can load any ROM file from the SD card or download it from the public repository in the net.",
+            "image": "https://placehold.co/256x256/png",
+            "tags": [
+                "Emulation",
+                "ROM"
+            ],
+            "devices": [
+                "Atari ST",
+                "Atari STE",
+                "Atari MegaST",
+                "Atari MegaSTE"
+            ],
+            "binary": "https://tosemulator.sidecartridge.com/SWITCHER.TOS.v2.1.0",
+            "md5": "e571e9873a3703a787884727d864f213",
+            "version": "2.0.0"
+        },
+        {
+            "uuid": "c698d797-d0e0-46b7-9347-df42a5d64ad0",
+            "name": "GEMDRIVE Emulator",
+            "description": "GEMDRIVE is a virtual hard disk drive emulator for the Atari ST. It can emulate any hard disk drive with any size on any folder name on the SD card.",
+            "image": "https://placehold.co/256x256/png",
+            "tags": [
+                "Emulation",
+                "Hard Disk"
+            ],
+            "devices": [
+                "Atari ST",
+                "Atari STE",
+                "Atari MegaST",
+                "Atari MegaSTE"
+            ],
+            "binary": "hhttps://tosemulator.sidecartridge.com/SWITCHER.TOS.v2.1.0",
+            "md5": "e571e9873a3703a787884727d864f213",
+            "version": "2.0.0"
+        },
+        {
+            "uuid": "5da89c11-83f1-4e31-aa2e-44237ef9fabb",
+            "name": "Floppy Emulator",
+            "description": "Floppy Emulator is a virtual floppy disk drive emulator for the Atari ST. It can emulate floppy disk in .ST and .MSA formats, and download them from the public repository in the net.",
+            "image": "https://placehold.co/256x256/png",
+            "tags": [
+                "Emulation",
+                "Floppy Disk"
+            ],
+            "devices": [
+                "Atari ST",
+                "Atari STE",
+                "Atari MegaST",
+                "Atari MegaSTE"
+            ],
+            "binary": "https://tosemulator.sidecartridge.com/SWITCHER.TOS.v2.1.0",
+            "md5": "e571e9873a3703a787884727d864f213",
+            "version": "2.0.0"
+        },
+        {
+            "uuid": "5da89c11-83f1-4e31-aa2e-44237ef9fabc",
+            "name": "RTC Emulator",
+            "description": "Real Time Clock Emulator is a virtual real time clock emulator for the Atari ST. It synchronizes the computer clock with a remote NTP server.",
+            "image": "https://placehold.co/256x256/png",
+            "tags": [
+                "Emulation",
+                "RTC"
+            ],
+            "devices": [
+                "Atari ST",
+                "Atari STE",
+                "Atari MegaST",
+                "Atari MegaSTE"
+            ],
+            "binary": "https://tosemulator.sidecartridge.com/SWITCHER.TOS.v2.1.0",
+            "md5": "e571e9873a3703a787884727d864f213",
+            "version": "2.0.0"
+        },
+        {
+            "uuid": "5da89c11-83f1-4e31-aa2e-44237ef9fabd",
+            "name": "Enchilada mode",
+            "description": "RTC, GEMDRIVE and ROM Emulator in one single emulation mode.",
+            "image": "https://placehold.co/256x256/png",
+            "tags": [
+                "RTC",
+                "Hard Disk",
+                "Floppy Disk"
+            ],
+            "devices": [
+                "Atari ST",
+                "Atari STE",
+                "Atari MegaST",
+                "Atari MegaSTE"
+            ],
+            "binary": "https://tosemulator.sidecartridge.com/SWITCHER.TOS.v2.1.0",
+            "md5": "e571e9873a3703a787884727d864f213",
+            "version": "2.0.0"
+        }
+    ]
+}
