@@ -14,7 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "cjson/cjson.h"
+#include "cjson/cJSON.h"
 #include "constants.h"
 #include "debug.h"
 #include "gconfig.h"

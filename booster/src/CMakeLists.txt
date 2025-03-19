@@ -148,7 +148,7 @@ target_sources(${PROJECT_NAME} PRIVATE
         usb_descriptors.c
         usb_mass.c
         tusb_config.h
-        cjson/cjson.c
+        cjson/cJSON.c
         httpc/httpc.c
         md5/md5.c
         settings/settings.c

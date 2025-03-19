@@ -9,35 +9,32 @@
 #ifndef MNGR_H
 #define MNGR_H
 
-#include "debug.h"
-#include "constants.h"
-#include "gconfig.h"
-#include "network.h"
-#include "reset.h"
-#include "sdcard.h"
-#include "usb_mass.h"
-#include "display.h"
-#include "display_mngr.h"
-#include "display_usb.h"
-#include "mngr_httpd.h"
-#include "appmngr.h"
-#include "term.h"
-#include "select.h"
-
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "pico/stdlib.h"
-#include "pico/multicore.h"
-
-#include "lwip/apps/httpd.h"
-#include "pico/async_context.h"
-#include "lwip/altcp_tls.h"
-
+#include "appmngr.h"
+#include "cjson/cJSON.h"
+#include "constants.h"
+#include "debug.h"
+#include "display.h"
+#include "display_mngr.h"
+#include "display_usb.h"
+#include "gconfig.h"
 #include "httpc/httpc.h"
-#include "cjson/cjson.h"
+#include "lwip/altcp_tls.h"
+#include "lwip/apps/httpd.h"
+#include "mngr_httpd.h"
+#include "network.h"
+#include "pico/async_context.h"
+#include "pico/multicore.h"
+#include "pico/stdlib.h"
+#include "reset.h"
+#include "sdcard.h"
+#include "select.h"
+#include "term.h"
+#include "usb_mass.h"
 
 void mngr_enable_network_scan();
 void mngr_disable_network_scan();
@@ -49,5 +46,4 @@ void mngr_schedule_factory_reset(int seconds);
 int mngr_init(void);
 void mngr_loop();
 
-
-#endif // MNGR_H
+#endif  // MNGR_H

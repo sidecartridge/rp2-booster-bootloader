@@ -1,9 +1,9 @@
 # Create a library for the cJSON files
 add_library(cjson
-    cjson.c
+    cJSON.c
 )
 
-# Add the include directory (for cjson.h)
+# Add the include directory (for cJSON.h)
 target_include_directories(cjson PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 # Link necessary libraries
