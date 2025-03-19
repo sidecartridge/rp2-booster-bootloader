@@ -55,6 +55,13 @@ mkdir -p dist
 echo "Building UF2 file combining booster and placeholder..."
 python build_uf2.py ./build/placeholder.uf2 ./build/booster.uf2 ./dist/rp-booster.uf2
 
+# Rename the file to include the version number and the build type
+if [ "$BUILD_TYPE" = "release" ]; then
+    mv ./dist/rp-booster.uf2 ./dist/rp-booster-$VERSION.uf2
+else
+    mv ./dist/rp-booster.uf2 ./dist/rp-booster-$VERSION-$BUILD_TYPE.uf2
+fi
+
 # If there is no parameter ${3} passed, then exit
 if [ -z ${3} ]; then
     echo "Existing now, no image file building requested"
