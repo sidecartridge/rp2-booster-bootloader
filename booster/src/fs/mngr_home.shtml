@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <!-- Important for mobile: ensures responsive scaling -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:;base64,=">
+  <title><!--#TITLEHDR--></title>
+
+  <!-- Pure.css (CDN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
+    integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous" />
+  <!-- Grid responsiveness (sm, md, lg classes) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />
+  <link rel="stylesheet" href="styles.css?v=1.0" />
+
+  <!-- Font Awesome for icons (CDN) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+
+
+  <script>
+    function appManager() {
+      return {
+        apps: [],         // Remote apps
+        local_apps: [],   // Local apps discovered via cgi
+        installed_app: [],
+        loaded_apps: false,
+        showDeleteModal: false,
+        showLaunchModal: false,
+        uuidToDelete: null,
+        uuidToLaunch: null,
+        retryAttempts: 0,
+        maxRetries: 3,
+        initialized: false, // new flag to prevent duplicate init
+        fetchError: false,  // new flag for remote fetch error
+
+        init() {
+          if (this.initialized) return;
+          this.initialized = true;
+          // 1) Fetch remote apps.json
+          fetch("<!--#APPSURL-->")
+            .then((response) => response.json())
+            .then((data) => {
+              // Suppose the JSON looks like { "apps": [...] }
+              this.apps = data.apps || [];
+
+              // 2) Fetch local apps
+              this.fetchLocalAppsFirst();
+            })
+            .catch((error) => {
+              console.error("Error fetching remote apps:", error);
+              this.fetchError = true; // set flag on error
+              this.fetchLocalAppsFirst();
+            });
+        },
+
+        // -------------------------------------
+        // Fetch the *first* local app JSON
+        // from /mngr_fsfirst.cgi
+        // -------------------------------------
+        fetchLocalAppsFirst() {
+          fetch("/mngr_fsfirst.cgi")
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+              }
+              // Read the response as text
+              return response.text();
+            })
+            .then((text) => {
+              try {
+                const data = JSON.parse(text);
+                if (this.isNonEmptyObject(data)) {
+                  this.local_apps.push(data);
+                  // Reset retry counter on success
+                  this.retryAttempts = 0;
+                  // Move on to fetch next
+                  this.fetchLocalAppsNext();
+                } else {
+                  console.log("No local apps found (no first JSON).");
+                  // Merge info now that we know no local apps
+                  this.mergeLocalIntoApps();
+                }
+              } catch (error) {
+                console.error("Error parsing response as JSON:", error);
+                console.log("Raw response text:", text);
+                // Merge anyway (since we presumably have no local apps)
+                this.mergeLocalIntoApps();
+              }
+            })
+            .catch((error) => {
+              console.error("Error fetching first local app:", error);
+              if (this.retryAttempts < this.maxRetries) {
+                this.retryAttempts++;
+                console.log(`Retrying fetchLocalAppsFirst: attempt ${this.retryAttempts}/${this.maxRetries}`);
+                // Optionally reset local_apps to start fresh
+                this.local_apps = [];
+                this.fetchLocalAppsFirst();
+              } else {
+                console.error("Max retries reached in fetchLocalAppsFirst. Proceeding with merge.");
+                this.mergeLocalIntoApps();
+              }
+            });
+        },
+
+        // -------------------------------------
+        // Fetch the *next* local app JSON
+        // from /mngr_fsnext.cgi
+        // Keep calling until it returns empty
+        // -------------------------------------
+        fetchLocalAppsNext() {
+          fetch("/mngr_fsnext.cgi")
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+              }
+              return response.text();
+            })
+            .then((text) => {
+              try {
+                const data = JSON.parse(text);
+                if (this.isNonEmptyObject(data)) {
+                  this.local_apps.push(data);
+                  // Reset retry counter on success
+                  this.retryAttempts = 0;
+                  // Keep going
+                  this.fetchLocalAppsNext();
+                } else {
+                  console.log("No more local apps. Done.");
+                  // Merge once we've finished
+                  this.mergeLocalIntoApps();
+                }
+              } catch (error) {
+                console.error("Error parsing response as JSON:", error);
+                console.log("Raw response text:", text);
+                // Probably no more local apps or invalid data
+                this.mergeLocalIntoApps();
+              }
+            })
+            .catch((error) => {
+              console.log("Error fetching next local app:", error);
+              if (this.retryAttempts < this.maxRetries) {
+                this.retryAttempts++;
+                console.log(`Retrying from fetchLocalAppsNext: attempt ${this.retryAttempts}/${this.maxRetries}`);
+                // Optionally reset local_apps to start fresh
+                this.local_apps = [];
+                this.fetchLocalAppsFirst();
+              } else {
+                console.error("Max retries reached in fetchLocalAppsNext. Proceeding with merge.");
+                this.mergeLocalIntoApps();
+              }
+            });
+        },
+
+        // -------------------------------------
+        // Merge local_apps info into apps array
+        // Add:
+        //   app.launched = false
+        //   app.installed = (any local app with same uuid)
+        //   app.update = (true if installed and version mismatch)
+        // -------------------------------------
+        mergeLocalIntoApps() {
+          this.apps.forEach((remoteApp) => {
+            // Always add 'launched' = false
+            remoteApp.launched = false;
+
+            // See if there's a matching local app by uuid
+            const localApp = this.local_apps.find((loc) => loc.uuid === remoteApp.uuid);
+
+            if (localApp) {
+              // If found, mark installed=true
+              remoteApp.installed = true;
+              // Check version
+              if (localApp.version !== remoteApp.version) {
+                remoteApp.update = true;
+              } else {
+                remoteApp.update = false;
+              }
+            } else {
+              // Not found => installed=false, update=false
+              remoteApp.installed = false;
+              remoteApp.update = false;
+            }
+          });
+
+          // Sort apps by "name", ignoring case
+          this.apps.sort((a, b) => {
+            return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+          });
+
+          // After merging, you can log or do any additional logic
+          console.log("Final remote apps with local info:", this.apps);
+
+          // Show local apps
+          console.log("Local apps:", this.local_apps);
+
+          // Confirm that we're done
+          this.loaded_apps = true;
+        },
+
+        // Utility: check if an object has any keys
+        isNonEmptyObject(obj) {
+          return obj && typeof obj === "object" && Object.keys(obj).length > 0;
+        },
+
+        // Download a remote app
+        download(uuid) {
+          const selectedApp = this.apps.find((app) => app.uuid === uuid);
+          if (!selectedApp) {
+            console.error("App not found for UUID:", uuid);
+            return;
+          }
+          // Prepare JSON
+          const jsonStr = JSON.stringify(selectedApp);
+          // Base64 encode
+          const base64 = btoa(jsonStr);
+          // Redirect
+          window.location = `/download.cgi?json=${base64}`;
+        },
+
+        // Trigger the modal for a specific UUID
+        confirmRemove(uuid) {
+          this.uuidToDelete = uuid;
+          this.showDeleteModal = true;
+          console.log('Deleting app with uuid:', uuid);
+        },
+
+        // If user confirms, do the redirection
+        deleteNow() {
+          if (this.uuidToDelete) {
+            window.location = `/mngr_deleteapp.cgi?uuid=${encodeURIComponent(this.uuidToDelete)}`;
+          }
+        },
+
+        // Update
+        updateApp(uuid) {
+          console.log('Updating app with uuid:', uuid);
+          // ... your update logic ...
+        },
+
+        // Confirm launch
+        confirmLaunch(uuid) {
+          this.uuidToLaunch = uuid;
+          this.showLaunchModal = true;
+          console.log('Launching app with uuid:', uuid);
+        },
+
+        // If the user confirms, launch the app
+        launchNow() {
+          if (this.uuidToLaunch) {
+            window.location = `/mngr_launchapp.cgi?uuid=${encodeURIComponent(this.uuidToLaunch)}`;
+          }
+        },
+
+      };
+    }
+  </script>
+
+
+</head>
+
+<body x-data="appManager()" x-init="init()">
+  <!-- Blue Banner Header -->
+  <header class="header">
+    <h1><!--#TITLEHDR--></h1>
+    <!-- Manually stop the network scan to avoid overload the WiFi chip -->
+    <!--#WLSTSTP-->
+  </header>
+
+  <!-- Navigation Bar -->
+  <nav class="nav-bar">
+    <div class="pure-menu pure-menu-horizontal">
+      <ul class="pure-menu-list">
+        <li class="pure-menu-item pure-menu-selected">
+          <a href="#" class="pure-menu-link">Apps</a>
+        </li>
+        <li class="pure-menu-item">
+          <a href="/mngr_network.shtml" class="pure-menu-link">Network</a>
+        </li>
+        <li class="pure-menu-item">
+          <a href="/mngr_config.shtml" class="pure-menu-link">Config</a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Main Content Area -->
+  <main class="main-content">
+    <h2>Available Apps</h2>
+    <p>
+      Below is the list of available micro-firmwares for your device. Click the DOWNLOAD button to download your chosen
+      app.
+    </p>
+    <p>
+      To launch an app, simply click the LAUNCH button. To return to this page, click the SELECT button on the device.
+    </p>
+
+    <!-- No SD card found. -->
+    <div x-show="<!--#SDCARDB--> === false" class="banner banner-error">
+      <i class="fas fa-exclamation-circle banner-icon"></i>of the
+      <span>We couldn't detect a functional microSD card in the SD card slot. Please ensure you're using a microSD card
+        formatted in exFAT or FAT32 and compatible with SDHC, SDXC, or SDUC standards. Once your card is ready, insert
+        it and reset the device to try again.</span>
+      <button class="banner-close" aria-label="Close">
+        &times;
+      </button>
+    </div>
+
+    <!-- No apps found banner. Show only if there is no folder but the SD card is ready -->
+    <div class="banner banner-warning" x-show="(<!--#SDCARDB--> === true) && (<!--#APPSFLDB--> === false)">
+      <i class="fas fa-exclamation-triangle banner-icon"></i> <!-- Warning Icon -->
+      <span>The folder for storing micro-firmwares is missing. This usually indicates that the device cannot write to
+        the microSD card. Please ensure the card is in read/write mode and try again.</span>
+      <button class="banner-close" aria-label="Close">
+        &times;
+      </button>
+    </div>
+
+    <!-- Warning banner for fetch error -->
+    <div class="banner banner-warning" x-show="fetchError">
+      <i class="fas fa-exclamation-triangle banner-icon"></i>
+      <span>Warning: The remote apps URL is not reachable. You can modify it in the config menu.</span>
+      <button class="banner-close" @click="fetchError = false" aria-label="Close">
+        &times;
+      </button>
+    </div>
+
+    <!--
+  <div
+    class="banner banner-info"
+    x-data="{ show: true }"
+    x-show="show"
+  >
+    <i class="fas fa-info-circle banner-icon"></i>
+    <span>Here’s some important information you should know.</span>
+    <button class="banner-close" @click="show = false" aria-label="Close">
+      &times;
+    </button>
+  </div>
+
+  <div
+    class="banner banner-success"
+    x-data="{ show: true }"
+    x-show="show"
+  >
+    <i class="fas fa-check-circle banner-icon"></i> 
+    <span>Success! Your action was completed successfully.</span>
+    <button class="banner-close" @click="show = false" aria-label="Close">
+      &times;
+    </button>
+  </div>
+  -->
+
+
+    <section class="app-list pure-g" x-show="loaded_apps" x-transition>
+      <!-- Loop through apps -->
+      <template x-for="app in apps" :key="app.uuid">
+        <div class="app-row pure-g">
+
+          <!-- Left-hand side: App Image (1/6 on md) -->
+          <!--
+        <div class="pure-u-1 pure-u-md-1-6 app-image">
+          <a :href="app.image" target="_blank">
+            <img :src="app.image" alt="App Image" class="app-thumbnail" />
+          </a>
+        </div>
+-->
+          <!-- Middle: App Details (2/3 on md) -->
+          <div class="pure-u-1 pure-u-md-2-3 app-details">
+            <!-- App Name -->
+            <h3 x-text="app.name"></h3>
+            <h4 x-text="app.version"></h4>
+            <!-- App Description -->
+            <p x-text="app.description"></p>
+            <!-- Combined Tags in one line -->
+            <div class="tags-row">
+              <!-- App Tags -->
+              <ul class="app-tags">
+                <template x-for="tag in app.tags" :key="tag">
+                  <li x-text="tag"></li>
+                </template>
+              </ul>
+              <!-- Device Tags -->
+              <ul class="device-tags">
+                <template x-for="device in app.devices" :key="device">
+                  <li x-text="device"></li>
+                </template>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Right-hand side: Buttons (1/6 on md) -->
+          <div class="pure-u-1 pure-u-md-1-6 app-actions">
+            <!-- Download button: only visible if not installed -->
+            <button class="pure-button pure-button-primary" x-show="!app.installed" @click="download(app.uuid)">
+              Download
+            </button>
+
+            <!-- Update button: only visible if app.update is true -->
+            <button class="pure-button" x-show="app.update" @click="updateApp(app.uuid)">
+              Update
+            </button>
+
+            <!-- Launch button: only visible if installed is true -->
+            <button class="pure-button" x-show="app.installed" @click="confirmLaunch(app.uuid)">
+              Launch
+            </button>
+
+            <!-- Delete button: only visible if installed is true -->
+            <button class="pure-button button-delete" x-show="app.installed" @click="confirmRemove(app.uuid)">
+              Delete
+            </button>
+          </div>
+
+        </div>
+      </template>
+    </section>
+
+    <!-- The confirmation modal (hidden by default) -->
+    <!-- x-cloak hides the element until Alpine is fully loaded -->
+    <div class="modal" x-show="showDeleteModal" x-cloak x-transition>
+      <!-- A simple dark overlay behind the modal -->
+      <div class="modal-overlay" @click="showDeleteModal=false"></div>
+
+      <div class="modal-content">
+        <h3>Confirm Deletion</h3>
+        <p>Are you sure you want to delete this app?</p>
+
+        <div class="modal-buttons">
+          <!-- Confirm button -->
+          <button class="pure-button pure-button-primary" @click="deleteNow()">
+            Yes, Delete
+          </button>
+
+          <!-- Cancel button -->
+          <button class="pure-button" @click="showDeleteModal=false">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- The information modal (hidden by default) -->
+    <!-- x-cloak hides the element until Alpine is fully loaded -->
+    <div class="modal" x-show="showLaunchModal" x-cloak x-transition>
+      <!-- A simple dark overlay behind the modal -->
+      <div class="modal-overlay" @click="showLaunchModal = false"></div>
+
+      <div class="modal-content">
+        <h3>Launching app</h3>
+        <p>The app will start now. If your computer does not reset automatically, please reset it manually to start the
+          application.</p>
+        <p>To return to this menu, press the SELECT button and power cycle your computer.</p>
+
+        <div class="modal-buttons">
+          <!-- Confirm button -->
+          <button class="pure-button pure-button-primary" @click="launchNow()">
+            Yes, Launch the app
+          </button>
+
+          <!-- Cancel button -->
+          <button class="pure-button" @click="showLaunchModal = false">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+
+  </main>
+
+  <!-- System panel in-page -->
+  <!-- System Section -->
+  <section class="system-section pure-g">
+    <div class="pure-u-1">
+      <h2>System info</h2>
+    </div>
+
+    <ul class="system-list pure-g">
+      <!-- SD Card Free Space -->
+      <li class="system-item pure-u-1 pure-u-sm-1-2">
+        <div class="item-inner">
+          <div class="label-cell">
+            <i class="fas fa-sd-card"></i>
+            <span>SD Card</span>
+          </div>
+          <div class="value-cell"><!--#SDCARDST--></div>
+        </div>
+      </li>
+
+      <!-- Apps Folder -->
+      <li class="system-item pure-u-1 pure-u-sm-1-2">
+        <div class="item-inner">
+          <div class="label-cell">
+            <i class="fas fa-folder-plus"></i>
+            <span>Apps folder</span>
+          </div>
+          <div class="value-cell"><!--#APPSFLDR--></div>
+        </div>
+      </li>
+
+      <!-- SSID -->
+      <li class="system-item pure-u-1 pure-u-sm-1-2">
+        <div class="item-inner">
+          <div class="label-cell">
+            <i class="fas fa-wifi"></i>
+            <span>SSID</span>
+          </div>
+          <div class="value-cell"><!--#SSID--></div>
+        </div>
+      </li>
+
+      <!-- IP Address -->
+      <li class="system-item pure-u-1 pure-u-sm-1-2">
+        <div class="item-inner">
+          <div class="label-cell">
+            <i class="fas fa-network-wired"></i>
+            <span>IP address</span>
+          </div>
+          <div class="value-cell"><!--#IPADDR--></div>
+        </div>
+      </li>
+
+    </ul>
+  </section>
+
+
+  <!-- System panel client-side -->
+  <!--
+  <div
+    id="system-include"
+    class="pure-u-1"
+    x-data
+    x-init="
+      const fetchSystemPanel = () => {
+        fetch('/system.shtml')
+          .then(res => res.text())
+          .then(html => $el.innerHTML = html)
+          .catch(err => console.error('Error fetching system panel:', err));
+      };
+
+      // Execute immediately at time 0
+      fetchSystemPanel();
+
+      // Then execute every 10 seconds
+      setInterval(fetchSystemPanel, 10000);
+    "
+  ></div>
+  -->
+
+  <!-- Footer information in-page -->
+  <footer class="footer">
+    <p>&copy; 2025 GOODDATA LABS SLU. All rights reserved.</p>
+  </footer>
+
+  <!-- Footer loaded client-side  -->
+  <!--
+  <div
+    id="footer-include" 
+    class="pure-u-1"
+    x-data
+    x-init="
+      fetch('/footer.inc')
+        .then(res => res.text())
+        .then(html => $el.innerHTML = html)
+    "
+  ></div>
+  -->
+</body>
+
+</html>

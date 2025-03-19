@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:;base64,=">
+  <title><!--#TITLEHDR--></title>
+
+  <!-- Pure.css (CDN) -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
+    integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls"
+    crossorigin="anonymous"
+  />
+  <!-- Grid responsiveness (sm, md, lg classes) -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css"
+  />
+  <link rel="stylesheet" href="styles.css?v=1.0" />
+  
+  <!-- Font Awesome for icons (CDN) -->
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+  />
+  
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+
+  <script>
+    function deviceManager() {
+      return {
+        showInfoModal: false,
+        infoTitle: '',
+        infoMessage: '',
+        showErrorModal: false,
+        errorTitle: '',
+        errorMessage: '',
+        showConfirmationModal: false,
+        
+        showInfo(title, msg) {
+          this.infoTitle = title;
+          this.infoMessage = msg;
+          this.showInfoModal = true;
+        },
+        
+        showError(title, msg) {
+          this.errorTitle = title;
+          this.errorMessage = msg;
+          this.showErrorModal = true;
+        },
+
+        deviceConfig() {
+          return {
+            params: [],
+            originalParams: [],
+            init() {
+              fetch('/deviceconf.shtml')
+                .then(response => response.json())
+                .then(data => {
+                  this.params = data.params || [];
+                  this.originalParams = JSON.parse(JSON.stringify(this.params));
+                })
+                .catch(err => console.error('Error fetching device params:', err));
+            },
+            
+            save() {
+              const jsonStr = JSON.stringify(this.params.map(entry => ({
+                name: entry.name,
+                type: entry.type,
+                value: entry.value
+              })));
+              
+              const base64 = btoa(jsonStr);
+              const safeBase64 = encodeURIComponent(base64);
+
+              fetch(`/saveparams.cgi?json=${base64}`, { method: "GET" })
+                .then(res => res.text())
+                .then(text => {
+                  try {
+                    const json = JSON.parse(text);
+                    if (json.status !== 200) throw new Error(json.message);
+                    this.showInfo('Success', 'Device configuration saved successfully');
+                  } catch (e) {
+                    this.showError('Error', e.message);
+                  }
+                })
+                .catch(err => this.showError('Network Error', err.message));
+            },
+            
+            cancel() {
+              this.params = JSON.parse(JSON.stringify(this.originalParams));
+            }
+          };
+        }
+      };
+    }
+  </script>
+</head>
+
+<body x-data="deviceManager()">
+  <!-- Header -->
+  <header class="header">
+    <h1><!--#TITLEHDR--></h1>
+    <!-- Manually stop the network scan to avoid overload the WiFi chip -->
+    <!--#WLSTSTP-->
+  </header>
+
+  <!-- Navigation -->
+  <nav class="nav-bar">
+    <div class="pure-menu pure-menu-horizontal">
+      <ul class="pure-menu-list">
+        <li class="pure-menu-item">
+          <a href="/mngr_home.shtml" class="pure-menu-link">Apps</a>
+        </li>
+        <li class="pure-menu-item">
+          <a href="/mngr_network.shtml" class="pure-menu-link">Wifi</a>
+        </li>
+        <li class="pure-menu-item  pure-menu-selected">
+          <a href="#" class="pure-menu-link">Config</a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+  
+  <!-- Main Content -->
+  <main class="main-content-full-width">
+    <h2>Device Configuration</h2>
+    <p>Manage your device settings here.</p>
+
+    <!-- Configuration Section -->
+    <div x-data="deviceManager().deviceConfig()" x-init="init()">
+      <template x-for="(param, index) in params" :key="index">
+        <div class="pure-g" style="margin-bottom: 1rem;">
+          <div class="pure-u-1 pure-u-md-1-3" style="display: flex; align-items: center;">
+            <label x-text="param.label || param.name"></label>
+          </div>
+          
+          <div class="pure-u-1 pure-u-md-2-3">
+            <!-- String Input -->
+            <template x-if="param.type === 'STRING'">
+              <input type="text" class="pure-input-1" x-model="param.value" maxlength="128">
+            </template>
+
+            <!-- Number Input -->
+            <template x-if="param.type === 'INT'">
+              <input type="number" class="pure-input-1" x-model="param.value" min="0" max="65535">
+            </template>
+
+            <!-- Boolean Select -->
+            <template x-if="param.type === 'BOOL'">
+              <select class="pure-input-1" x-model="param.value">
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- Action Buttons -->
+      <div style="margin-top: 1.5rem;">
+        <button class="pure-button pure-button-primary" @click="save">Save</button>
+        <button class="pure-button" @click="cancel">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Additional Buttons -->
+    <div style="margin-top: 2rem;">
+      <button 
+        class="pure-button pure-button-primary" 
+        @click="showInfo('Rebooting', 'The device will reboot now. Please wait...'); setTimeout(() => location.href='/reboot.cgi', 1000);">
+        Reboot the device
+      </button>
+      <button 
+        class="pure-button pure-button-warning" 
+        @click="showConfirmationModal = true">
+        Restore to the default fabric settings
+      </button>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div class="modal" x-show="showConfirmationModal" x-cloak>
+      <div class="modal-overlay" @click="showConfirmationModal = false"></div>
+      <div class="modal-content">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <i class="fas fa-exclamation-circle modal-error-icon"></i>
+          <div>
+            <h3>Confirmation Required</h3>
+            <p>Are you sure you want to restore the device to its default factory settings? This will erase all custom configurations.</p>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="pure-button pure-button-primary" @click="location.href='/factoryreset.cgi'">Yes, Restore</button>
+          <button class="pure-button" @click="showConfirmationModal = false">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- System Section -->
+  <section class="system-section pure-g">
+    <div class="pure-u-1">
+      <h2>System info</h2>
+    </div>
+    <ul class="system-list pure-g">
+      <li class="system-item pure-u-1 pure-u-sm-1-2">
+        <div class="item-inner">
+          <div class="label-cell">
+            <i class="fas fa-sd-card"></i>
+            <span>SD Card</span>
+          </div>
+          <div class="value-cell"><!--#SDCARDST--></div>
+        </div>
+      </li>
+      <li class="system-item pure-u-1 pure-u-sm-1-2">
+        <div class="item-inner">
+          <div class="label-cell">
+            <i class="fas fa-folder-plus"></i>
+            <span>Apps folder</span>
+          </div>
+          <div class="value-cell"><!--#APPSFLDR--></div>
+        </div>
+      </li>
+      <li class="system-item pure-u-1 pure-u-sm-1-2">
+        <div class="item-inner">
+          <div class="label-cell">
+            <i class="fas fa-wifi"></i>
+            <span>SSID</span>
+          </div>
+          <div class="value-cell"><!--#SSID--></div>
+        </div>
+      </li>
+      <li class="system-item pure-u-1 pure-u-sm-1-2">
+        <div class="item-inner">
+          <div class="label-cell">
+            <i class="fas fa-network-wired"></i>
+            <span>IP address</span>
+          </div>
+          <div class="value-cell"><!--#IPADDR--></div>
+        </div>
+      </li>
+    </ul>
+  </section>
+
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2025 GOODDATA LABS SLU. All rights reserved.</p>
+  </footer>
+
+  <!-- Modals -->
+  <div class="modal" x-show="showInfoModal" x-cloak>
+    <div class="modal-overlay" @click="showInfoModal = false"></div>
+    <div class="modal-content">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <i class="fas fa-info-circle modal-info-icon"></i>
+        <div>
+          <h3 x-text="infoTitle"></h3>
+          <p x-text="infoMessage"></p>
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="pure-button pure-button-primary" @click="showInfoModal = false">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" x-show="showErrorModal" x-cloak>
+    <div class="modal-overlay" @click="showErrorModal = false"></div>
+    <div class="modal-content">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <i class="fas fa-exclamation-circle modal-error-icon"></i>
+        <div>
+          <h3 x-text="errorTitle"></h3>
+          <p x-text="errorMessage"></p>
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="pure-button pure-button-primary" @click="showErrorModal = false">OK</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

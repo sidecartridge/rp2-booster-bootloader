@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Important for mobile: ensures responsive scaling -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:;base64,=">
+    <title><!--#TITLEHDR--></title>
+    <style>
+        /* General Styles */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .container {
+            width: 90%;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        /* Header Styles */
+        .header {
+            background-color: #0078e7;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        /* Section Styles */
+        section {
+            margin-bottom: 20px;
+        }
+        section h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #0078e7;
+        }
+        section p {
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        /* Spinner Styles */
+        .spinner {
+            font-size: 16px;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 10px;
+            display: block;
+        }
+        /* Footer Styles */
+        .footer {
+            text-align: center;
+            padding: 10px;
+            font-size: 14px;
+            color: #777;
+        }
+
+        /* Responsive Adjustments for Small Screens */
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 20px;
+            }
+            section h2 {
+                font-size: 18px;
+            }
+            button {
+                font-size: 14px;
+                padding: 8px 16px;
+            }
+        }
+</style>
+    <script>
+        // Spinner logic
+        const spinnerFrames = ['|', '/', '-', '\\', '|', '/', '-', '\\'];
+        let currentFrame = 0;
+
+        function updateSpinner() {
+            const spinner = document.getElementById('spinner-char');
+            spinner.textContent = spinnerFrames[currentFrame];
+            currentFrame = (currentFrame + 1) % spinnerFrames.length;
+        }
+
+        // Start the spinner
+        setInterval(updateSpinner, 50);
+
+        // Redirect after 10 seconds
+        setTimeout(() => {
+            window.location.href = 'http://sidecart';
+        }, 20000);
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to <!--#TITLEHDR--></h1>
+        </div>
+        <section>
+            <h2>Restarting the device</h2>
+            <div>
+                <br/>
+                <p>
+                    The device is now restarting. The green LED will blink while attempting to connect to the selected WiFi network. Once connected successfully, the web application will automatically redirect you to the internet-connected app and the device to continue with the configuration. If the green LED continues blinking, press and hold the SELECT button for a few seconds to restart the configuration process again.
+                </p>
+                <br/>
+                <div id="spinner" class="spinner">
+                    Restarting <span id="spinner-char">|</span>
+                </div>
+            </div>
+        </section>
+        <div class="footer">
+            <p>&copy; 2024-25 GOODDATA LABS SLU. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

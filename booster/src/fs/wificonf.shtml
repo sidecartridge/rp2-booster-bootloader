@@ -1,0 +1,33 @@
+{
+    "params" :
+    [
+        {
+            "name": "WIFI_COUNTRY",
+            "label": "Country",
+            "type": "STRING",
+            "value": "<!--#WCNTRY-->",
+            "placeholder": "Enter 2 letters country code or XX for auto"
+        },
+        {
+            "name": "HOSTNAME",
+            "label": "Hostname",
+            "type": "STRING",
+            "value": "<!--#WHSTNM-->",
+            "placeholder": "Enter a unique hostname in your network"
+        },
+        {
+            "name": "WIFI_POWER",
+            "label": "Wifi Power",
+            "type": "INT",
+            "value": "<!--#WPWR-->",
+            "placeholder": "Enter 0 for low power, 1 for high power"
+        },
+        {
+            "name": "WIFI_RSSI",
+            "label": "Show RSSI?",
+            "type": "BOOL",
+            "value": "<!--#WRSS-->",
+            "placeholder": "Show RSSI in the network list"
+        }
+    ]             
+}

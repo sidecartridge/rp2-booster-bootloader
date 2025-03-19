@@ -1,0 +1,40 @@
+{
+"params" :
+[
+{
+"name": "APPS_FOLDER",
+"label": "Apps folder",
+"type": "STRING",
+"value": "<!--#APPSFLDR-->",
+"placeholder": "Folder to store the apps in the SD card"
+},
+{
+"name": "APPS_CATALOG_URL",
+"label": "Apps catalog URL",
+"type": "STRING",
+"value": "<!--#APPSURL-->",
+"placeholder": "URL to the apps catalog"
+},
+{
+"name": "BOOT_FEATURE",
+"label": "Boot feature",
+"type": "STRING",
+"value": "<!--#BTFTR-->",
+"placeholder": "Boot feature to run at startup. Leave empty to boot to the fabric config"
+},
+{
+"name": "SAFE_CONFIG_REBOOT",
+"label": "Safe SELECT reboot?",
+"type": "BOOL",
+"value": "<!--#SFCNFGRB-->",
+"placeholder": "Yes to reboot after power cycle if SELECT is pressed, or immediately"
+},
+{
+"name": "SD_BAUD_RATE_KB",
+"label": "SD card baud rate (KB)",
+"type": "INT",
+"value": "<!--#SDBDRTKB-->",
+"placeholder": "Baud rate of the SD card in KBauds. Max 50000."
+}
+]
+}

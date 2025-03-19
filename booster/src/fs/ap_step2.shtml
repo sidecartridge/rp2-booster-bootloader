@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- Important for mobile: ensures responsive scaling -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:;base64,=">
+    <title><!--#TITLEHDR--></title>
+    <style>
+        /* General Styles */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        .container {
+            width: 90%;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        /* Header Styles */
+        .header {
+            background-color: #0078e7;
+            color: #fff;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px 8px 0 0;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        /* Section Styles */
+        section {
+            margin-bottom: 20px;
+        }
+        section h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #0078e7;
+        }
+        section p {
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+        /* List Styles */
+        ol {
+            margin-left: 20px;
+            margin-bottom: 10px;
+        }
+        ol li {
+            margin-bottom: 5px;
+        }
+        /* Button Styles */
+        button {
+            background-color: #0078e7;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #005bb5;
+        }
+        .row {
+            display: flex;
+            align-items: center;
+        }
+        .name, .value {
+            flex: 1;
+        }
+        .name {
+            font-weight: bold;
+            text-align: right;
+            margin-right: 10px;
+        }
+        .value {
+            text-align: left;
+            display: flex;
+            align-items: center;
+        }
+        input {
+            flex: 1;
+            padding: 5px;
+            margin-right: 10px;
+            box-sizing: border-box;
+        }
+        .error {
+            color: red;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        .toggle-link {
+            cursor: pointer;
+            color: blue;
+            text-decoration: underline;
+        }
+        /* Footer Styles */
+        .footer {
+            text-align: center;
+            padding: 10px;
+            font-size: 14px;
+            color: #777;
+        }
+
+        /* Responsive Adjustments for Small Screens */
+        @media (max-width: 480px) {
+            .header h1 {
+                font-size: 20px;
+            }
+            section h2 {
+                font-size: 18px;
+            }
+            button {
+                font-size: 14px;
+                padding: 8px 16px;
+            }
+        }
+</style>
+    <script>
+        function togglePasswordVisibility() {
+            const passwordInput = document.getElementById('password');
+            const toggleLink = document.getElementById('toggle-password');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleLink.textContent = 'Hide';
+            } else {
+                passwordInput.type = 'password';
+                toggleLink.textContent = 'Show';
+            }
+        }
+        function validatePassword() {
+            const passwordInput = document.getElementById('password');
+            const errorElement = document.getElementById('error-message');
+            const maxLength = 63;
+
+            if (passwordInput.value.length > maxLength) {
+                errorElement.textContent = `Password cannot exceed ${maxLength} characters.`;
+                passwordInput.value = passwordInput.value.substring(0, maxLength);
+            } else {
+                errorElement.textContent = '';
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to <!--#TITLEHDR--></h1>
+        </div>
+        <section>
+            <h2>Network Information</h2>
+            <form method="POST" action="/ap_pass.cgi" id="network-form">
+                <div class="container">
+                    <div class="row">
+                        <div class="name">SSID:</div>
+                        <div class="value"><!--#WIFISSID--></div>
+                    </div>
+                    <div class="row">
+                        <div class="name">Auth mode:</div>
+                        <div class="value"><!--#WIFIAUTH--></div>
+                    </div>
+                    <div class="row">
+                        <div class="name">Password:</div>
+                        <div class="value">
+                            <input 
+                                type="password" 
+                                id="password" 
+                                name="pass" 
+                                placeholder="Enter your password" 
+                                oninput="validatePassword()"
+                                required
+                            >
+                            <span 
+                                id="toggle-password" 
+                                class="toggle-link" 
+                                onclick="togglePasswordVisibility()"
+                            >
+                                Show
+                            </span>
+                        </div>
+                    </div>
+                    <div class="error" id="error-message"></div>
+                </div>
+                <div>
+                    <br/>
+                    <p>Enter the password and click "Connect" to connect to the selected network.</p>
+                    <br/>
+                    <button type="submit">Connect</button>
+                </div>
+            </form>
+        </section>
+        <div class="footer">
+            <p>&copy; 2024-25 GOODDATA LABS SLU. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
