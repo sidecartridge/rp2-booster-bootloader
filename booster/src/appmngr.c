@@ -1410,6 +1410,46 @@ download_poll_t appmngr_poll_download_app() {
   return DOWNLOAD_POLL_COMPLETED;
 }
 
+static download_err_t calculate_md5_of_tmp_file(MD5Context *md5_ctx) {
+  FRESULT res;
+  FIL md5_file;
+  char filename[256] = {0};
+  get_tmp_filename_path(filename);
+
+  res = f_open(&md5_file, filename, FA_READ);
+  if (res != FR_OK) {
+    DPRINTF("Error opening tmp file for MD5 calculation: %i\n", res);
+    return DOWNLOAD_CANNOTOPENFILE_ERROR;
+  }
+
+  md5Init(md5_ctx);
+  char *buffer = malloc(4096);
+  if (buffer == NULL) {
+    DPRINTF("Error allocating buffer for MD5 calculation\n");
+    f_close(&md5_file);
+    return DOWNLOAD_CANNOTCREATE_CONFIG;
+  }
+  memset(buffer, 0, 4096);
+  UINT bytes_read;
+
+  do {
+    res = f_read(&md5_file, buffer, sizeof(buffer), &bytes_read);
+    if (res != FR_OK) {
+      DPRINTF("Error reading file %s for MD5 calculation: %i\n", filename, res);
+      f_close(&md5_file);
+      free(buffer);
+      return DOWNLOAD_CANNOTREADFILE_ERROR;
+    }
+    md5Update(md5_ctx, buffer, bytes_read);
+  } while (bytes_read > 0);
+
+  md5Finalize(md5_ctx);
+  f_close(&md5_file);
+  free(buffer);
+  DPRINTF("MD5 hash calculated\n");
+  return DOWNLOAD_OK;
+}
+
 download_err_t appmngr_finish_download_app() {
   // Close the file
   int res = f_close(&file);
@@ -1429,37 +1469,32 @@ download_err_t appmngr_finish_download_app() {
   }
   DPRINTF("App binary downloaded\n");
 
-  // Calculate MD5 of the downloaded file
-  DPRINTF("Calculating MD5 of downloaded tmp file.\n");
-  FIL md5_file;
-  char filename[256] = {0};
-  get_tmp_filename_path(filename);
-  res = f_open(&md5_file, filename, FA_READ);
-  if (res != FR_OK) {
-    DPRINTF("Error opening tmp file for MD5 calculation: %i\n", res);
-    return DOWNLOAD_CANNOTOPENFILE_ERROR;
-  }
-
   MD5Context md5_ctx;
-  md5Init(&md5_ctx);
-  char buffer[512];
-  UINT bytes_read;
-
-  do {
-    res = f_read(&md5_file, buffer, sizeof(buffer), &bytes_read);
-    if (res != FR_OK) {
-      DPRINTF("Error reading file %s for MD5 calculation: %i\n", filename, res);
-      f_close(&md5_file);
-      return DOWNLOAD_CANNOTREADFILE_ERROR;
-    }
-    md5Update(&md5_ctx, buffer, bytes_read);
-  } while (bytes_read > 0);
-
-  md5Finalize(&md5_ctx);
-  f_close(&md5_file);
+  download_err_t md5_ret = calculate_md5_of_tmp_file(&md5_ctx);
+  if (md5_ret != DOWNLOAD_OK) {
+    DPRINTF("Error calculating MD5 of tmp file: %d\n", md5_ret);
+    return md5_ret;
+  }
 
   memcpy(app_info.file_md5_digest, md5_ctx.digest,
          sizeof(app_info.file_md5_digest));
+  {
+    char file_md5_str[2 * sizeof(app_info.file_md5_digest) + 1];
+    for (int i = 0; i < sizeof(app_info.file_md5_digest); i++) {
+      sprintf(&file_md5_str[i * 2], "%02X", app_info.file_md5_digest[i]);
+    }
+    file_md5_str[2 * sizeof(app_info.file_md5_digest)] = '\0';
+    DPRINTF("MD5 hash of downloaded file: %s\n", file_md5_str);
+  }
+
+  {
+    char app_md5_str[2 * sizeof(app_info.md5) + 1];
+    for (int i = 0; i < sizeof(app_info.md5); i++) {
+      sprintf(&app_md5_str[i * 2], "%02X", app_info.md5[i]);
+    }
+    app_md5_str[2 * sizeof(app_info.md5)] = '\0';
+    DPRINTF("MD5 hash of app info: %s\n", app_md5_str);
+  }
 
   // Compare the MD5 hash with the one in the app info
   if (memcmp(app_info.md5, app_info.file_md5_digest, sizeof(app_info.md5)) !=
