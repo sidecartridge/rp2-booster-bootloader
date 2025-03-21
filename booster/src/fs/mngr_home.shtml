@@ -301,7 +301,7 @@
 
     <!-- No SD card found. -->
     <div x-show="<!--#SDCARDB--> === false" class="banner banner-error">
-      <i class="fas fa-exclamation-circle banner-icon"></i>of the
+      <i class="fas fa-exclamation-circle banner-icon"></i><!-- Error Icon -->
       <span>We couldn't detect a functional microSD card in the SD card slot. Please ensure you're using a microSD card
         formatted in exFAT or FAT32 and compatible with SDHC, SDXC, or SDUC standards. Once your card is ready, insert
         it and reset the device to try again.</span>

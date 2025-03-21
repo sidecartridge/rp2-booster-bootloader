@@ -140,6 +140,7 @@ To build the project assuming you have already cloned this repository and the su
 picotool load -xv dist/rp-booster-$VERSION.uf2
 ```
 
+
 ## License
 
 The source code of the project is licensed under the GNU General Public License v3.0. The full license is accessible in the [LICENSE](LICENSE) file. 
