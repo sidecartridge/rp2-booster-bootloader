@@ -133,6 +133,7 @@ int main() {
     // (Temporaly disabled)
     // settings_put_string(gconfig_getContext(), PARAM_BOOT_FEATURE,
     // "BOOSTER"); settings_save(gconfig_getContext(), true);
+    multicore_lockout_victim_init();  // keep the core 1 locked out
     mngr_init();
     mngr_loop();
     return 0;
