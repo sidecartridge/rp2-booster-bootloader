@@ -140,7 +140,64 @@ To build the project assuming you have already cloned this repository and the su
 picotool load -xv dist/rp-booster-$VERSION.uf2
 ```
 
+## Booster Quickstart Guide
 
+### Initial Factory Configuration for SidecarTridge Multidevice on Atari ST Series Computers
+
+1. Format a microSD card with either **exFAT** or **FAT32** file system and insert it into the SidecarTridge Multidevice board.
+
+2. Plug the SidecarTridge Multidevice into the **cartridge port** of your Atari ST series computer.
+
+3. Power on the Atari ST computer.
+
+4. The Booster app will automatically start in **Factory (Fabric) mode**, showing the following message on screen:
+
+   ![Booster Factory Mode step 1](/docs/BOOSTER-FABRIC-1.png)
+
+   This screen confirms that the Booster app is running in Factory mode and is ready to be configured.  
+   Scan the **QR code** with your smartphone to connect to the WiFi network created by the Booster app, or manually connect via your WiFi settings.  
+   The default network details are:
+   - **SSID**: `SIDECART`  
+   - **Password**: `sidecart`
+
+5. Once connected to the WiFi, the Booster app will detect the connection and show the following screen:
+
+   ![Booster Factory Mode step 2](/docs/BOOSTER-FABRIC-2.png)
+
+   This screen invites you to open a web browser and navigate to either:
+   - `http://sidecart.local`  
+   - or `http://192.168.4.1` (if `.local` domains aren’t supported)
+
+6. In your web browser, enter the URL shown above to access the web interface.  
+   You’ll be prompted to configure your home or office WiFi network.  
+   Select your WiFi SSID from the list (you can click **Refresh** if it doesn’t appear), then click it to continue.  
+   In this example, the network is `CHISMEROUTER`.
+
+   ![Booster Factory Mode step 3](/docs/BOOSTER-FABRIC-3.png)
+
+7. Enter your WiFi password and click the **Connect** button.
+
+   ![Booster Factory Mode step 4](/docs/BOOSTER-FABRIC-4.png)
+
+8. The Booster app will save the WiFi credentials to flash memory and reboot.  
+   It will then connect to your WiFi network and show this message:
+
+   ![Booster Factory Mode step 5](/docs/BOOSTER-FABRIC-5.png)
+
+   Meanwhile, the device will also display a reboot message on the Atari screen:
+
+   ![Booster Factory Mode step 6](/docs/BOOSTER-FABRIC-6.png)
+
+9. After rebooting, the Booster app will attempt to connect to your configured WiFi network:
+
+   ![Booster Manager Mode step 1](/docs/BOOSTER-MANAGER-1.png)
+
+10. Once connected successfully, the screen will show:
+
+    ![Booster Maneger Mode step 2](/docs/BOOSTER-MANAGER-2.png)
+
+    Your WiFi setup is now complete. From now on, the Booster app will boot directly into **Manager mode**.  
+    See the next section for details on using Manager mode.
 ## License
 
 The source code of the project is licensed under the GNU General Public License v3.0. The full license is accessible in the [LICENSE](LICENSE) file. 
