@@ -175,7 +175,47 @@ int mngr_init() {
 
   // Init the download apps
   appmngr_init();
-  sleep_ms(500);
+
+  // Configure the sd card, if possible
+  bool sdcard_ready = false;
+  if (!appmngr_get_sdcard_info()->ready) {
+    // Try to initialize the SD card
+    SettingsConfigEntry *appsFolder =
+        settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER);
+    char *appsFolderName = "/apps";
+    if (appsFolder == NULL) {
+      DPRINTF(
+          "APPS_FOLDER not found in the configuration. Using default "
+          "value\n");
+    } else {
+      DPRINTF("APPS_FOLDER: %s\n", appsFolder->value);
+      appsFolderName = appsFolder->value;
+    }
+    int sdcard_err = sdcard_initFilesystem(&fs, appsFolderName);
+    if (sdcard_err == SDCARD_INIT_OK) {
+      DPRINTF("SD card found & initialized\n");
+      appmngr_get_sdcard_info()->ready = true;
+      // Obtain the free space in the SD card
+      uint32_t total_size = 0;
+      uint32_t free_space = 0;
+      sdcard_getInfo(&fs, &total_size, &free_space);
+      appmngr_get_sdcard_info()->total_size = total_size;
+      appmngr_get_sdcard_info()->free_space = free_space;
+      DPRINTF("SD card total size: %uMB\n",
+              appmngr_get_sdcard_info()->total_size);
+      DPRINTF("SD card free space: %uMB\n",
+              appmngr_get_sdcard_info()->free_space);
+      char *apps_folder =
+          settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value;
+      if (apps_folder != NULL) {
+        appmngr_get_sdcard_info()->apps_folder_found =
+            sdcard_dirExist(apps_folder);
+      }
+      sdcard_ready = true;
+    } else {
+      DPRINTF("Error initializing the SD card: %i\n", sdcard_err);
+    }
+  }
 
   // Start the HTTP server
   mngr_httpd_start();
@@ -201,43 +241,6 @@ int mngr_init() {
 #endif
     if (network_scan_enabled) {
       network_scan(&wifi_scan_time, wifi_scan_polling_interval);
-    }
-    if (!appmngr_get_sdcard_info()->ready) {
-      // Try to initialize the SD card
-      SettingsConfigEntry *appsFolder =
-          settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER);
-      char *appsFolderName = "/apps";
-      if (appsFolder == NULL) {
-        DPRINTF(
-            "APPS_FOLDER not found in the configuration. Using default "
-            "value\n");
-      } else {
-        DPRINTF("APPS_FOLDER: %s\n", appsFolder->value);
-        appsFolderName = appsFolder->value;
-      }
-      int sdcard_err = sdcard_initFilesystem(&fs, appsFolderName);
-      if (sdcard_err == SDCARD_INIT_OK) {
-        DPRINTF("SD card found & initialized\n");
-        appmngr_get_sdcard_info()->ready = true;
-        // Obtain the free space in the SD card
-        uint32_t total_size = 0;
-        uint32_t free_space = 0;
-        sdcard_getInfo(&fs, &total_size, &free_space);
-        appmngr_get_sdcard_info()->total_size = total_size;
-        appmngr_get_sdcard_info()->free_space = free_space;
-        DPRINTF("SD card total size: %uMB\n",
-                appmngr_get_sdcard_info()->total_size);
-        DPRINTF("SD card free space: %uMB\n",
-                appmngr_get_sdcard_info()->free_space);
-        char *apps_folder =
-            settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value;
-        if (apps_folder != NULL) {
-          appmngr_get_sdcard_info()->apps_folder_found =
-              sdcard_dirExist(apps_folder);
-        }
-      } else {
-        DPRINTF("Error initializing the SD card: %i\n", sdcard_err);
-      }
     }
     if (bypass &&
         (absolute_time_diff_us(get_absolute_time(), show_screen_timeout) < 0)) {
