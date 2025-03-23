@@ -218,7 +218,30 @@ static download_err_t set_app_info(const char *json_str) {
   // Finally, copy the JSON string into the app_info struct in the json field
   snprintf(app_info.json, sizeof(app_info.json), "%s", json_str);
 
-  DPRINTF("App info set\n");
+  DPRINTF("App info set:\n");
+  DPRINTF("UUID: %s\n", app_info.uuid);
+  DPRINTF("Name: %s\n", app_info.name);
+  DPRINTF("Description: %s\n", app_info.description);
+  DPRINTF("Image: %s\n", app_info.image);
+  DPRINTF("Tags: ");
+  for (int i = 0; i < app_info.tags_count; i++) {
+    DPRINTF("+- %s\n", app_info.tags[i]);
+  }
+  DPRINTF("Devices: ");
+  for (int i = 0; i < app_info.devices_count; i++) {
+    DPRINTF("+- %s\n", app_info.devices[i]);
+  }
+  DPRINTF("Binary: %s\n", app_info.binary);
+  char app_md5_str[2 * sizeof(app_info.md5) + 1];
+  for (int i = 0; i < sizeof(app_info.md5); i++) {
+    sprintf(&app_md5_str[i * 2], "%02X", app_info.md5[i]);
+  }
+  app_md5_str[2 * sizeof(app_info.md5)] = '\0';
+  DPRINTF("MD5: %s\n", app_md5_str);
+
+  DPRINTF("Version: %s\n", app_info.version);
+  DPRINTF("JSON: %s\n", app_info.json);
+  DPRINTF("App info set successfully\n");
   return DOWNLOAD_OK;
 }
 
@@ -234,10 +257,20 @@ download_err_t appmngr_save_app_info(const char *json_str) {
   char filename[256] = {0};
   snprintf(filename, sizeof(filename), "%s/tmp.json",
            settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value);
+
+  // Let's try to delete first the temp file if it exists
+  FRESULT ferr = f_unlink(filename);
+  if (ferr == FR_NO_FILE) {
+    // If the file doesn't exist, we ignore the error
+    DPRINTF("Error deleting file. %s does not exist. Continuing...\n",
+            filename);
+  }
+
+  // Now write the app info to the temp file
   DPRINTF("Saving app info to file: %s\n", filename);
   DPRINTF("JSON: %s\n", app_info.json);
-  int ferr = sdcard_write_file(filename, app_info.json, strlen(app_info.json));
-  if (ferr != 0) {
+  ferr = sdcard_write_file(filename, app_info.json, strlen(app_info.json));
+  if (ferr != FR_OK) {
     DPRINTF("Error saving app info to file: %i\n", ferr);
   } else {
     DPRINTF("App info saved to file: %s\n", filename);
@@ -1349,6 +1382,14 @@ download_err_t appmngr_start_download_app() {
   // Clear read-only attribute if necessary
   f_chmod(filename, 0, AM_RDO);
 
+  // Let's try to remove the file if it exists
+  res = f_unlink(filename);
+  if (res == FR_NO_FILE) {
+    // Ignore the error if the file doesn't exist
+    DPRINTF("Error deleting file. %s does not exists: %i. Continuing.\n",
+            filename, res);
+  }
+
   // Open file for writing or create if it doesn't exist
   res = f_open(&file, filename, FA_WRITE | FA_CREATE_ALWAYS);
   if (res == FR_LOCKED) {
@@ -1469,6 +1510,15 @@ download_err_t appmngr_finish_download_app() {
   }
   DPRINTF("App binary downloaded\n");
 
+  // Debugging lines of strange compiling errors in Linux
+  // Remove when figure out what is going on
+  char app_md5_str[2 * sizeof(app_info.md5) + 1];
+  for (int i = 0; i < sizeof(app_info.md5); i++) {
+    sprintf(&app_md5_str[i * 2], "%02X", app_info.md5[i]);
+  }
+  app_md5_str[2 * sizeof(app_info.md5)] = '\0';
+  DPRINTF("MD5 hash of app info: %s\n", app_md5_str);
+
   MD5Context md5_ctx;
   download_err_t md5_ret = calculate_md5_of_tmp_file(&md5_ctx);
   if (md5_ret != DOWNLOAD_OK) {
@@ -1476,25 +1526,31 @@ download_err_t appmngr_finish_download_app() {
     return md5_ret;
   }
 
+  // Debugging lines of strange compiling errors in Linux
+  // Remove when figure out what is going on
+  memset(app_md5_str, 0, sizeof(app_md5_str));
+  for (int i = 0; i < sizeof(app_info.md5); i++) {
+    sprintf(&app_md5_str[i * 2], "%02X", app_info.md5[i]);
+  }
+  app_md5_str[2 * sizeof(app_info.md5)] = '\0';
+  DPRINTF("MD5 hash of app info: %s\n", app_md5_str);
+
   memcpy(app_info.file_md5_digest, md5_ctx.digest,
          sizeof(app_info.file_md5_digest));
-  {
-    char file_md5_str[2 * sizeof(app_info.file_md5_digest) + 1];
-    for (int i = 0; i < sizeof(app_info.file_md5_digest); i++) {
-      sprintf(&file_md5_str[i * 2], "%02X", app_info.file_md5_digest[i]);
-    }
-    file_md5_str[2 * sizeof(app_info.file_md5_digest)] = '\0';
-    DPRINTF("MD5 hash of downloaded file: %s\n", file_md5_str);
-  }
+  char file_md5_str[2 * sizeof(app_info.file_md5_digest) + 1];
 
-  {
-    char app_md5_str[2 * sizeof(app_info.md5) + 1];
-    for (int i = 0; i < sizeof(app_info.md5); i++) {
-      sprintf(&app_md5_str[i * 2], "%02X", app_info.md5[i]);
-    }
-    app_md5_str[2 * sizeof(app_info.md5)] = '\0';
-    DPRINTF("MD5 hash of app info: %s\n", app_md5_str);
+  for (int i = 0; i < sizeof(app_info.file_md5_digest); i++) {
+    sprintf(&file_md5_str[i * 2], "%02X", app_info.file_md5_digest[i]);
   }
+  file_md5_str[2 * sizeof(app_info.file_md5_digest)] = '\0';
+  DPRINTF("MD5 hash of downloaded file: %s\n", file_md5_str);
+
+  memset(app_md5_str, 0, sizeof(app_md5_str));
+  for (int i = 0; i < sizeof(app_info.md5); i++) {
+    sprintf(&app_md5_str[i * 2], "%02X", app_info.md5[i]);
+  }
+  app_md5_str[2 * sizeof(app_info.md5)] = '\0';
+  DPRINTF("MD5 hash of app info: %s\n", app_md5_str);
 
   // Compare the MD5 hash with the one in the app info
   if (memcmp(app_info.md5, app_info.file_md5_digest, sizeof(app_info.md5)) !=
@@ -1589,20 +1645,24 @@ download_err_t appmngr_confirm_download_app() {
 }
 
 download_err_t appmngr_confirm_failed_download_app() {
-  // Delete tmp files due to failed download
-  char tmp_json_filename[256] = {0};
-  snprintf(tmp_json_filename, sizeof(tmp_json_filename), "%s/tmp.json",
-           settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value);
-  char tmp_binary_filename[256] = {0};
-  snprintf(tmp_binary_filename, sizeof(tmp_binary_filename), "%s/tmp.download",
-           settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value);
+  // // Delete tmp files due to failed download
+  // char tmp_json_filename[256] = {0};
+  // snprintf(tmp_json_filename, sizeof(tmp_json_filename), "%s/tmp.json",
+  //          settings_find_entry(gconfig_getContext(),
+  //          PARAM_APPS_FOLDER)->value);
+  // char tmp_binary_filename[256] = {0};
+  // snprintf(tmp_binary_filename, sizeof(tmp_binary_filename),
+  // "%s/tmp.download",
+  //          settings_find_entry(gconfig_getContext(),
+  //          PARAM_APPS_FOLDER)->value);
 
-  // Try to delete the files if they exist
-  f_unlink(tmp_json_filename);
-  f_unlink(tmp_binary_filename);
+  // // Try to delete the files if they exist
+  // f_unlink(tmp_json_filename);
+  // f_unlink(tmp_binary_filename);
 
-  DPRINTF("Deleted files %s and %s\n", tmp_json_filename, tmp_binary_filename);
-  return DOWNLOAD_OK;
+  // DPRINTF("Deleted files %s and %s\n", tmp_json_filename,
+  // tmp_binary_filename);
+  return DOWNLOAD_STATUS_FAILED;
 }
 
 void appmngr_init() {
