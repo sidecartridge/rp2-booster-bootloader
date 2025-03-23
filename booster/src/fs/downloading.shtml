@@ -44,7 +44,7 @@
     // Redirect after 20 seconds
     setTimeout(() => {
       window.location.href = '/mngr_home.shtml';
-    }, 20000);
+    }, 30000);
   </script>
 
 </head>
