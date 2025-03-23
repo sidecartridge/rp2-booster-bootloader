@@ -542,7 +542,7 @@ static u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen
                          u16_t current_tag_part, u16_t *next_tag_part
 #endif /* LWIP_HTTPD_SSI_MULTIPART */
 ) {
-  DPRINTF("SSI handler called with index %d\n", iIndex);
+  // DPRINTF("SSI handler called with index %d\n", iIndex);
   size_t printed;
   switch (iIndex) {
     case 0: /* "HOMEPAGE" */
@@ -630,7 +630,7 @@ static u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen
     }
     case 7: /* JSONPLD */
     {
-      DPRINTF("SSI JSONPLD handler called with index %d\n", iIndex);
+      // DPRINTF("SSI JSONPLD handler called with index %d\n", iIndex);
       int chunk_size = 128;
       /* The offset into json based on current tag part */
       size_t offset = current_tag_part * chunk_size;
