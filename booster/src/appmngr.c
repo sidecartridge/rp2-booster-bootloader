@@ -202,12 +202,13 @@ static download_err_t set_app_info(const char *json_str) {
       return DOWNLOAD_PARSEMD5_ERROR;
     }
     for (int i = 0; i < 16; i++) {
-      // Check that sscanf successfully converted a single byte.
-      if (sscanf(md5_str + (i * 2), "%2hhx", &app_info.md5[i]) != 1) {
+      unsigned int byte;
+      if (sscanf(md5_str + (i * 2), "%2x", &byte) != 1) {
         DPRINTF("Error parsing MD5 hex at index %d\n", i);
         cJSON_Delete(root);
         return DOWNLOAD_PARSEMD5_ERROR;
       }
+      app_info.md5[i] = (unsigned char)byte;
     }
   } else {
     DPRINTF("MD5 field is missing or is not a valid string\n");
