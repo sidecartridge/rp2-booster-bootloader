@@ -192,21 +192,29 @@ static download_err_t set_app_info(const char *json_str) {
     snprintf(app_info.binary, sizeof(app_info.binary), "%s",
              binary->valuestring);
   }
-  if (md5 && cJSON_IsString(md5)) {
+  if (md5 && cJSON_IsString(md5) && md5->valuestring) {
     // Convert MD5 string to 16-byte binary array
     const char *md5_str = md5->valuestring;
     size_t md5_len = strlen(md5_str);
-    if (md5_len == 32)  // MD5 string should be 32 hex characters
-    {
-      for (int i = 0; i < 16; i++) {
-        sscanf(md5_str + (i * 2), "%2hhx", &app_info.md5[i]);
-      }
-    } else {
+    if (md5_len != 32) {  // MD5 string should be exactly 32 hex characters
       DPRINTF("Invalid MD5 length in JSON: %zu\n", md5_len);
       cJSON_Delete(root);
       return DOWNLOAD_PARSEMD5_ERROR;
     }
+    for (int i = 0; i < 16; i++) {
+      // Check that sscanf successfully converted a single byte.
+      if (sscanf(md5_str + (i * 2), "%2hhx", &app_info.md5[i]) != 1) {
+        DPRINTF("Error parsing MD5 hex at index %d\n", i);
+        cJSON_Delete(root);
+        return DOWNLOAD_PARSEMD5_ERROR;
+      }
+    }
+  } else {
+    DPRINTF("MD5 field is missing or is not a valid string\n");
+    cJSON_Delete(root);
+    return DOWNLOAD_PARSEMD5_ERROR;
   }
+
   if (version && cJSON_IsString(version)) {
     snprintf(app_info.version, sizeof(app_info.version), "%s",
              version->valuestring);
