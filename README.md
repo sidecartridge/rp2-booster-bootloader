@@ -205,6 +205,8 @@ In **Manager mode**, the Booster app will automatically connect to your configur
 
 If your DHCP network supports a DNS with `.local` domains, you can access the web interface using `http://sidecart.local`. Otherwise, use the IP address assigned by your DHCP server and visible on your computer screen.
 
+> **Note**: The device needs a SDHC or SDXC microSD card formatted with **exFAT** or **FAT32** file system to work properly. The app will warn the user if the microSD card is not present or not formatted correctly.
+
 ### Apps view
 
 The **Apps view** shows:
