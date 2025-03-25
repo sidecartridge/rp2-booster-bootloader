@@ -133,6 +133,12 @@ To build the project assuming you have already cloned this repository and the su
    ./build.sh pico_w debug 
    ```
 
+## Downloading the project
+
+> **Note**: The project is in alpha version so only the Alpha nightly builds are available. Use at your own risk. 
+
+The project is available in the [Nightly releases section](https://github.com/sidecartridge/rp2-booster-bootloader/releases/tag/nightly) section.
+
 ## Installing the project  
 
 [Install the picotool](https://github.com/raspberrypi/picotool) to flash the bootloader on your board:
@@ -242,7 +248,7 @@ The Booster microfirmware app is now installed in the flash memory of the device
 
 To return to the Booster app, the user needs to use the command menu on the microfirmware app to do it, or press the SELECT button for more than 10 seconds and then power off and power on the device and the computer.
 
-> **Note**: In this Alpha version, the only microfirmware app available is the **ROM Emulator** app. The **DEV APP** is a placeholder development app for anybody who wants to develop a microfirmware app. It is not a real app and it does not do anything.
+> **Note**: In this Alpha version, the only microfirmware app available is the **[ROM Emulator](https://github.com/sidecartridge/md-rom-emulator)** app. The **DEV APP** is a placeholder development app for anybody who wants to develop a microfirmware app. It is not a real app and it does not do anything.
 
 ### WiFi view
 
