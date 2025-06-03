@@ -41,11 +41,11 @@
 #define LWIP_ICMP 1
 #define LWIP_RAW 0
 #define TCP_MSS 1460
-// #define TCP_WND (12 * TCP_MSS)
-// #define TCP_SND_BUF (8 * TCP_MSS)
+#define TCP_WND (12 * TCP_MSS)
+#define TCP_SND_BUF (8 * TCP_MSS)
 
-#define TCP_WND (6 * TCP_MSS)
-#define TCP_SND_BUF (4 * TCP_MSS)
+// #define TCP_WND (6 * TCP_MSS)
+// #define TCP_SND_BUF (4 * TCP_MSS)
 
 #define TCP_SND_QUEUELEN ((4 * (TCP_SND_BUF) + (TCP_MSS - 1)) / (TCP_MSS))
 #define LWIP_NETIF_STATUS_CALLBACK 1
@@ -124,7 +124,7 @@
 #define LWIP_HTTPD_SUPPORT_POST 1
 #define LWIP_HTTPD_SUPPORT_11_KEEPALIVE 1
 
-#define LWIP_HTTPD_FS_ASYNC_READ 0
+#define LWIP_HTTPD_FS_ASYNC_READ 1
 #define HTTPD_POLL_INTERVAL 1
 #define HTTPD_PRECALCULATED_CHECKSUM 1
 #define HTTPD_USE_MEM_POOL 1
