@@ -237,9 +237,19 @@
         },
 
         // Update
-        updateApp(uuid) {
+        confirmUpdate(uuid) {
           console.log('Updating app with uuid:', uuid);
-          // ... your update logic ...
+          const selectedApp = this.apps.find((app) => app.uuid === uuid);
+          if (!selectedApp) {
+            console.error("App not found for UUID:", uuid);
+            return;
+          }
+          // Prepare JSON
+          const jsonStr = JSON.stringify(selectedApp);
+          // Base64 encode
+          const base64 = btoa(jsonStr);
+          // Redirect
+          window.location = `/download.cgi?update=T&json=${base64}`;
         },
 
         // Confirm launch
@@ -401,7 +411,7 @@
             </button>
 
             <!-- Update button: only visible if app.update is true -->
-            <button class="pure-button" x-show="app.update" @click="updateApp(app.uuid)">
+            <button class="pure-button" x-show="app.update" @click="confirmUpdate(app.uuid)">
               Update
             </button>
 

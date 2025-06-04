@@ -160,6 +160,20 @@ static const char *cgi_test(int iIndex, int iNumParams, char *pcParam[],
 const char *cgi_download(int iIndex, int iNumParams, char *pcParam[],
                          char *pcValue[]) {
   DPRINTF("cgi_download called with index %d\n", iIndex);
+  bool update = false;
+  for (size_t i = 0; i < iNumParams; i++) {
+    /* check if parameter is "update" */
+    if (strcmp(pcParam[i], "update") == 0) {
+      DPRINTF("Update flag found, value: %s\n", pcValue[i]);
+      if (starts_with_case_insensitive(pcValue[i], "YyTt")) {
+        update = true;
+      } else {
+        update = false;
+      }
+      DPRINTF("Update flag set to: %d\n", update);
+    }
+  }
+  appmngr_set_download_update(update);
   for (size_t i = 0; i < iNumParams; i++) {
     /* check if parameter is "json" */
     if (strcmp(pcParam[i], "json") == 0) {
