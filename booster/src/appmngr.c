@@ -12,6 +12,9 @@ static bool s_dir_opened = false;
 static char s_folder[256];
 static download_launch_err_t launch_status = DOWNLOAD_LAUNCHAPP_IDLE;
 static char launch_app_uuid[37] = {0};
+static bool download_update = false;
+
+void appmngr_set_download_update(bool update) { download_update = update; }
 
 // Helper function to check if a 36-character string is a valid UUID4.
 // A valid UUID4 is in the canonical format
@@ -751,21 +754,60 @@ static int16_t appmngr_get_page_number_for_uuid(const char *uuid,
 }
 
 /**
- * Append or overwrite an entry in the lookup table.
+ * @brief Retrieves the lookup table sector corresponding to a given UUID.
  *
- * This function searches the lookup table for an existing entry with the given
- * UUID.
- * - If found, it overwrites the sector value with the new value.
- * - If not found, it searches for an empty slot (an entry whose first byte is
- * 0) and appends the new entry.
+ * @param uuid         The UUID string to search for. Must be exactly 36
+ * characters in length.
+ * @param table        Pointer to the lookup table containing the entries.
+ * @param table_length Pointer to a variable holding the table's total length in
+ * bytes. This could be a pointer to const if the length is not modified.
  *
- * @param uuid         A pointer to a 36-character UUID string.
- * @param sector       The 16-bit sector value to store.
- * @param table        Pointer to the lookup table data in memory.
- * @param table_length Total length in bytes of the lookup table.
- *
- * @return 0 on success, or -1 if the table is full or the UUID is invalid.
+ * @return The sector number if a matching UUID is found; otherwise, returns a
+ * negative error code:
+ *         - Returns -1 if the UUID length is invalid.
+ *         - Returns -2 if the UUID format is invalid.
+ *         - Returns -3 if the UUID was not found in the table.
  */
+static int appmngr_get_lookup_table_sector(const char *uuid, uint8_t *table,
+                                           uint16_t *table_length) {
+  int sector = -3;  // Default to -3 to indicate not found or error
+  // Validate that the UUID is exactly 36 characters
+  if (strlen(uuid) != 36) {
+    DPRINTF("Invalid UUID length: %u. Expected 36 characters.\n",
+            (unsigned)strlen(uuid));
+    return -1;  // Error: invalid UUID length
+  }
+
+  if (!is_valid_uuid4(uuid)) {
+    DPRINTF("Invalid UUID format: %s\n", uuid);
+    return -2;  // Error: invalid UUID format
+  }
+
+  uint16_t num_entries = *table_length / LOOKUP_ENTRY_SIZE;
+  int indexFound = -1;
+
+  // Iterate through each entry in the table.
+  for (uint16_t i = 0; i < num_entries; i++) {
+    uint8_t *entry = table + (i * LOOKUP_ENTRY_SIZE);
+    // If the entry is not empty (first byte is not 0), check if it matches the
+    // UUID.
+    if (entry[0] != 0) {
+      if (memcmp(entry, uuid, 36) == 0) {
+        indexFound = i;
+        break;
+      }
+    }
+  }
+
+  // Return the sector if found.
+  if (indexFound != -1) {
+    uint8_t *entry = table + (indexFound * LOOKUP_ENTRY_SIZE);
+    sector = entry[36] | (entry[37] << 8);
+    DPRINTF("Return entry at index %d with sector %u.\n", indexFound, sector);
+  }
+  return sector;
+}
+
 static int appmngr_update_lookup_table(const char *uuid, uint16_t sector,
                                        uint8_t *table, uint16_t *table_length) {
   // Validate that the UUID is exactly 36 characters
@@ -1579,33 +1621,38 @@ download_err_t appmngr_finish_download_app() {
   // Read the table from flash memory
   appmngr_load_apps_lookup_table(table, &table_length);
 
-  // Update the table
-  uint16_t new_sector =
-      appmngr_find_first_empty_config_sector(table, &table_length);
-  res = appmngr_update_lookup_table(app_info.uuid, new_sector, table,
-                                    &table_length);
+  // If the download is an update, don't delete the config sector
+  if (!download_update) {
+    // Update the table
+    uint16_t new_sector =
+        appmngr_find_first_empty_config_sector(table, &table_length);
+    res = appmngr_update_lookup_table(app_info.uuid, new_sector, table,
+                                      &table_length);
 
-  // Persist the table if ok
-  if (res == -1) {
-    DPRINTF("Something went wrong updating the app lookup table.\n");
-  } else {
-    res = appmngr_persist_app_lookup_table(table, table_length);
+    // Persist the table if ok
     if (res == -1) {
-      DPRINTF("There was something wrong persisting the app lookup table.\n");
+      DPRINTF("Something went wrong updating the app lookup table.\n");
     } else {
-      DPRINTF("App lookup table pesisted!\n");
+      res = appmngr_persist_app_lookup_table(table, table_length);
+      if (res == -1) {
+        DPRINTF("There was something wrong persisting the app lookup table.\n");
+      } else {
+        DPRINTF("App lookup table pesisted!\n");
+      }
     }
-  }
-  free(table);
+    free(table);
 
-  // Now delete the config sector of the app
-  res = appmngr_delete_config_sector(new_sector);
-  if (res != 0) {
-    DPRINTF("Error deleting config sector: %i\n", res);
-    return DOWNLOAD_CANNOTDELETECONFIGSECTOR_ERROR;
+    // Now delete the config sector of the app
+    res = appmngr_delete_config_sector(new_sector);
+    if (res != 0) {
+      DPRINTF("Error deleting config sector: %i\n", res);
+      return DOWNLOAD_CANNOTDELETECONFIGSECTOR_ERROR;
+    }
+    DPRINTF("Config sector %d deleted\n", new_sector);
+    return DOWNLOAD_OK;
+  } else {
+    DPRINTF("Download is an update, not deleting the config sector.\n");
   }
-  DPRINTF("Config sector %d deleted\n", new_sector);
-  return DOWNLOAD_OK;
 }
 
 download_err_t appmngr_confirm_download_app() {

@@ -142,6 +142,8 @@ download_err_t appmngr_save_app_info(const char *json_str);
 
 int appmngr_delete_app_info();
 
+void appmngr_set_download_update(bool update);
+
 download_delete_err_t appmngr_delete_app(const char *uuid);
 download_launch_err_t appmngr_launch_app();
 download_err_t appmngr_start_download_app();
