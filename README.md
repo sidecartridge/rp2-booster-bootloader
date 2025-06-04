@@ -139,12 +139,27 @@ To build the project assuming you have already cloned this repository and the su
 
 The project is available in the [Nightly releases section](https://github.com/sidecartridge/rp2-booster-bootloader/releases/tag/nightly) section.
 
-## Installing the project  
+## Installing the project
 
-[Install the picotool](https://github.com/raspberrypi/picotool) to flash the bootloader on your board:
+Go for the option that best suits you. Both options will install the bootloader on your Raspberry Pi Pico W.
+
+###  Option 1: Using the drag-and-drop method
+1. Connect the Raspberry Pi Pico W micro USB connector to your computer while holding the **BOOTSEL** button.
+2. Your computer should recognize the device as the mass storage device `RPI-RP2`. Now you can release the **BOOTSEL** button.
+3. Drag and drop the [Full Release](https://github.com/sidecartridge/rp2-booster-bootloader/releases/download/nightly/rp-booster-v1.0.0alpha-full.uf2) file to the `RPI-RP2` drive.
+4. Wait for the file to be copied. When the copy is complete you can disconnect the Raspberry Pi Pico W from your computer.
+
+### Option 2: Using picotool
+
+With this method you must [first install the picotool](https://github.com/raspberrypi/picotool) helper tool, which is a command-line utility for managing Raspberry Pi devices based on the RP2040 microcontroller.
+
+1. Connect the Raspberry Pi Pico W micro USB connector to your computer while holding the **BOOTSEL** button.
+2. Your computer should recognize the device as the mass storage device `RPI-RP2`. Now you can release the **BOOTSEL** button.
+3. Flash the bootloader on your board:
 ```bash
 picotool load -xv dist/rp-booster-$VERSION.uf2
 ```
+
 
 ## Booster Quickstart Guide
 
