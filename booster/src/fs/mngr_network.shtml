@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <!-- Important for mobile: ensures responsive scaling -->
@@ -8,27 +9,16 @@
   <title><!--#TITLEHDR--></title>
 
   <!-- Pure.css (CDN) -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
-    integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls"
-    crossorigin="anonymous"
-  />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
+    integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous" />
   <!-- Grid responsiveness (sm, md, lg classes) -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css"
-  />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />
   <link rel="stylesheet" href="styles.css?v=1.0" />
-  
+
   <!-- Font Awesome for icons (CDN) -->
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    crossorigin="anonymous"
-    referrerpolicy="no-referrer"
-  />
-  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+
   <!-- Alpine.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 
@@ -101,10 +91,10 @@
 
                   if (json.status !== 200) {
                     throw new Error(`Save error: ${json.message || "Unknown error"}`);
-                  } 
-                  
+                  }
+
                   console.log("Parameters saved successfully:", json.message);
-                  this.showInfo('Success','WiFi Parameters saved successfully.');
+                  this.showInfo('Success', 'WiFi Parameters saved successfully.');
 
                 })
                 .catch(err => {
@@ -159,10 +149,10 @@
 
                   if (json.status !== 200) {
                     throw new Error(`Save error: ${json.message || "Unknown error"}`);
-                  } 
-                  
+                  }
+
                   console.log("Parameters saved successfully:", json.message);
-                  this.showInfo('Success','TCP/IP Parameters saved successfully.');
+                  this.showInfo('Success', 'TCP/IP Parameters saved successfully.');
                 })
                 .catch(err => {
                   console.error("Error saving params:", err);
@@ -188,93 +178,93 @@
         },
 
         wifiList() {
-            return {
-              wifis: [],
-              sortKey: 'name', // default initial sort column
-              sortAsc: true,   // ascending by default
+          return {
+            wifis: [],
+            sortKey: 'name', // default initial sort column
+            sortAsc: true,   // ascending by default
 
-              init() {
-                // 1) Fetch the list on load
-                this.fetchList();
-                // 2) Then auto-refresh every 5 seconds
-                setInterval(() => this.fetchList(), 5000);
-              },
+            init() {
+              // 1) Fetch the list on load
+              this.fetchList();
+              // 2) Then auto-refresh every 5 seconds
+              setInterval(() => this.fetchList(), 5000);
+            },
 
-              getAuthString(authcode) {
-                const code = parseInt(authcode, 10);
-                switch (code) {
-                  case 1:
-                  case 2: return "WPA_TKIP";
-                  case 3:
-                  case 4:
-                  case 5: return "WPA2_AES";
-                  case 6:
-                  case 7:
-                  case 8: return "WPA2_MIXED";
-                  default: return "OPEN";
-                }
-              },
-
-              fetchList() {
-                fetch('/wifilist.shtml')
-                  .then(response => response.json())
-                  .then(data => {
-                    // Store networks in wifis
-                    this.wifis = data.wifis || [];
-                    // Sort them initially by name
-                    this.sortKey = 'name';
-                    this.sortAsc = true;
-                    this.sortItems();
-                  })
-                  .catch(err => console.error('Error fetching Wi-Fi list:', err));
-              },
-
-              // Called when a user clicks a column header
-              sortBy(key) {
-                if (this.sortKey === key) {
-                  // If already sorting by this key, flip ascending/descending
-                  this.sortAsc = !this.sortAsc;
-                } else {
-                  // Otherwise, switch to a new key in ascending order
-                  this.sortKey = key;
-                  this.sortAsc = true;
-                }
-                this.sortItems();
-              },
-
-              // Sort wifis in place using the current sortKey and sortAsc
-              sortItems() {
-                this.wifis.sort((a, b) => {
-                  let valA = a[this.sortKey];
-                  let valB = b[this.sortKey];
-
-                  // Convert RSSI/AUTH to number if desired, else they sort lexically
-                  // Example:
-                  if (this.sortKey === 'RSSI' || this.sortKey === 'AUTH') {
-                    valA = parseInt(valA, 10);
-                    valB = parseInt(valB, 10);
-                  }
-
-                  if (valA < valB) return this.sortAsc ? -1 : 1;
-                  if (valA > valB) return this.sortAsc ? 1 : -1;
-                  return 0;
-                });
-              },
-
-              // Clicking a row calls connect to navigate
-              connect(net) {
-                // net.SSID => network SSID
-                // net.AUTH => the auth value
-                window.location.href = `/mngr_connect.shtml?name=${encodeURIComponent(net.SSID)}&auth=${encodeURIComponent(net.AUTH)}`;
+            getAuthString(authcode) {
+              const code = parseInt(authcode, 10);
+              switch (code) {
+                case 1:
+                case 2: return "WPA_TKIP";
+                case 3:
+                case 4:
+                case 5: return "WPA2_AES";
+                case 6:
+                case 7:
+                case 8: return "WPA2_MIXED";
+                default: return "OPEN";
               }
-            };
-          }
+            },
+
+            fetchList() {
+              fetch('/wifilist.shtml')
+                .then(response => response.json())
+                .then(data => {
+                  // Store networks in wifis
+                  this.wifis = data.wifis || [];
+                  // Sort them initially by name
+                  this.sortKey = 'name';
+                  this.sortAsc = true;
+                  this.sortItems();
+                })
+                .catch(err => console.error('Error fetching Wi-Fi list:', err));
+            },
+
+            // Called when a user clicks a column header
+            sortBy(key) {
+              if (this.sortKey === key) {
+                // If already sorting by this key, flip ascending/descending
+                this.sortAsc = !this.sortAsc;
+              } else {
+                // Otherwise, switch to a new key in ascending order
+                this.sortKey = key;
+                this.sortAsc = true;
+              }
+              this.sortItems();
+            },
+
+            // Sort wifis in place using the current sortKey and sortAsc
+            sortItems() {
+              this.wifis.sort((a, b) => {
+                let valA = a[this.sortKey];
+                let valB = b[this.sortKey];
+
+                // Convert RSSI/AUTH to number if desired, else they sort lexically
+                // Example:
+                if (this.sortKey === 'RSSI' || this.sortKey === 'AUTH') {
+                  valA = parseInt(valA, 10);
+                  valB = parseInt(valB, 10);
+                }
+
+                if (valA < valB) return this.sortAsc ? -1 : 1;
+                if (valA > valB) return this.sortAsc ? 1 : -1;
+                return 0;
+              });
+            },
+
+            // Clicking a row calls connect to navigate
+            connect(net) {
+              // net.SSID => network SSID
+              // net.AUTH => the auth value
+              window.location.href = `/mngr_connect.shtml?name=${encodeURIComponent(net.SSID)}&auth=${encodeURIComponent(net.AUTH)}`;
+            }
+          };
         }
+      }
     };
-</script>
+  </script>
 </head>
 
-<body x-data="networkManager()"  x-init="init()">
+<body x-data="networkManager()" x-init="init()">
 
   <!-- Blue Banner Header -->
   <header class="header">
@@ -287,29 +277,29 @@
       <ul class="pure-menu-list">
         <li class="pure-menu-item">
           <a href="/mngr_home.shtml" class="pure-menu-link">Apps</a>
-        </li>
+        </li>6
         <li class="pure-menu-item pure-menu-selected">
           <a href="#" class="pure-menu-link">Wifi</a>
         </li>
         <li class="pure-menu-item">
           <a href="/mngr_config.shtml" class="pure-menu-link">Config</a>
         </li>
+        <li class="pure-menu-item">
+          <a href="https://docs.sidecartridge.com/sidecartridge-multidevice/#do-you-want-to-test-the-new-alpha-firmware"
+            target="_blank" class="pure-menu-link">Help</a>
+        </li>
       </ul>
     </div>
   </nav>
-  
+
   <!-- Main Content Area -->
   <main class="main-content-full-width">
     <h2>Wifi configuration</h2>
     <p>Modify your wifi settings here.</p>
-    
+
     <!-- WiFi Parameters Section -->
-    <div 
-      class="params-container" 
-      x-data="networkManager().wifiConfig(showInfo, showError)" 
-      x-init="init()"
-      style="margin-bottom: 2rem;"
-    >
+    <div class="params-container" x-data="networkManager().wifiConfig(showInfo, showError)" x-init="init()"
+      style="margin-bottom: 2rem;">
       <!-- Display each parameter in a row: 1/3 for label, 2/3 for the input -->
       <template x-for="(param, index) in params" :key="index">
         <div class="pure-g" style="margin-bottom: 1rem;">
@@ -322,25 +312,14 @@
           <div class="pure-u-1 pure-u-md-2-3">
             <!-- STRING type: up to 128 chars -->
             <template x-if="param.type === 'STRING'">
-              <input
-                type="text"
-                class="pure-input-1"
-                :placeholder="param.placeholder || ''"
-                maxlength="128"
-                x-model="param.value"
-              />
+              <input type="text" class="pure-input-1" :placeholder="param.placeholder || ''" maxlength="128"
+                x-model="param.value" />
             </template>
 
             <!-- INT type: 0..65535 with real-time clamping -->
             <template x-if="param.type === 'INT'">
-              <input
-                type="number"
-                class="pure-input-1"
-                :placeholder="param.placeholder || ''"
-                min="0"
-                max="65535"
-                x-model="param.value"
-                @input="
+              <input type="number" class="pure-input-1" :placeholder="param.placeholder || ''" min="0" max="65535"
+                x-model="param.value" @input="
                   let raw = $event.target.value;
                   let val = parseInt(raw, 10);
 
@@ -355,8 +334,7 @@
                   // Update the param and the input field
                   param.value = val.toString();
                   $event.target.value = val;
-                "
-              />
+                " />
             </template>
 
             <!-- BOOL type: "Yes" or "No" combo -->
@@ -381,12 +359,8 @@
     <h2>TCP/IP configuration</h2>
     <p>Manage your TCP/IP network settings here.</p>
 
-    <div 
-      class="params-container" 
-      x-data="networkManager().tcpipConfig(showInfo, showError)" 
-      x-init="init()"
-      style="margin-bottom: 2rem;"
-    >
+    <div class="params-container" x-data="networkManager().tcpipConfig(showInfo, showError)" x-init="init()"
+      style="margin-bottom: 2rem;">
       <!-- 1) The WIFI_DHCP parameter: user picks Yes/No -->
       <!-- Display only the FIRST parameter named WIFI_DHCP -->
       <template x-for="(param, index) in params.filter(p => p.name === 'WIFI_DHCP').slice(0, 1)" :key="index">
@@ -407,11 +381,8 @@
 
       <!-- 2) Display all OTHER TCP/IP parameters ONLY IF WIFI_DHCP is "No" -->
       <div x-show="params.find(p => p.name === 'WIFI_DHCP')?.value === 'No'">
-        <template
-          x-for="(param, index) in params
-            .filter(p => p.name !== 'WIFI_DHCP')"
-          :key="index"
-        >
+        <template x-for="(param, index) in params
+            .filter(p => p.name !== 'WIFI_DHCP')" :key="index">
           <div class="pure-g" style="margin-bottom: 1rem;">
             <!-- Left Column (label) -->
             <div class="pure-u-1 pure-u-md-1-3" style="display: flex; align-items: center;">
@@ -422,33 +393,21 @@
             <div class="pure-u-1 pure-u-md-2-3">
               <!-- STRING type -->
               <template x-if="param.type === 'STRING'">
-                <input
-                  type="text"
-                  class="pure-input-1"
-                  :placeholder="param.placeholder || ''"
-                  maxlength="128"
-                  x-model="param.value"
-                />
+                <input type="text" class="pure-input-1" :placeholder="param.placeholder || ''" maxlength="128"
+                  x-model="param.value" />
               </template>
 
               <!-- INT type -->
               <template x-if="param.type === 'INT'">
-                <input
-                  type="number"
-                  class="pure-input-1"
-                  :placeholder="param.placeholder || ''"
-                  min="0"
-                  max="65535"
-                  x-model="param.value"
-                  @input="
+                <input type="number" class="pure-input-1" :placeholder="param.placeholder || ''" min="0" max="65535"
+                  x-model="param.value" @input="
                     let raw = $event.target.value;
                     let val = parseInt(raw, 10);
                     if (isNaN(val)) val = 0;
                     val = Math.max(0, Math.min(65535, val));
                     param.value = val.toString();
                     $event.target.value = val;
-                  "
-                />
+                  " />
               </template>
 
               <!-- BOOL type -->
@@ -484,20 +443,17 @@
             <th @click="sortBy('SSID')">SSID</th>
             <th @click="sortBy('BSSID')">BSSID</th>
             <th @click="sortBy('RSSI')">RSSI (db)</th>
-<!--            <th @click="sortBy('AUTH')">Auth mode</th> -->
+            <!--            <th @click="sortBy('AUTH')">Auth mode</th> -->
           </tr>
         </thead>
         <tbody>
           <!-- Display each network row -->
           <template x-for="(net, index) in wifis" :key="net.SSID + index">
-            <tr 
-              style="cursor: pointer;"
-              @click="connect(net)"
-            >
+            <tr style="cursor: pointer;" @click="connect(net)">
               <td x-text="net.SSID"></td>
               <td x-text="net.BSSID"></td>
               <td x-text="net.RSSI"></td>
-<!--              <td x-text="getAuthString(net.AUTH)"></td> -->
+              <!--              <td x-text="getAuthString(net.AUTH)"></td> -->
             </tr>
           </template>
         </tbody>
@@ -506,52 +462,44 @@
 
   </main>
 
-    <!-- Informative Message Modal (hidden by default) -->
-    <div 
-      class="modal" 
-      x-show="showInfoModal" 
-      x-cloak
-    >
+  <!-- Informative Message Modal (hidden by default) -->
+  <div class="modal" x-show="showInfoModal" x-cloak>
 
-      <!-- Dark Overlay -->
-      <div class="modal-overlay" @click="showInfoModal = false"></div>
-      <div class="modal-content">
-        <div style="display: flex; align-items: center; gap: 1rem;">
-          <!-- Information Icon -->
-          <i class="fas fa-info-circle modal-info-icon"></i>
-          <div>
-            <h3 x-text="infoTitle"></h3>
-            <p x-text="infoMessage"></p>
-          </div>
-        </div>
-        <div class="modal-buttons">
-          <button class="pure-button pure-button-primary" @click="showInfoModal = false">OK</button>
+    <!-- Dark Overlay -->
+    <div class="modal-overlay" @click="showInfoModal = false"></div>
+    <div class="modal-content">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <!-- Information Icon -->
+        <i class="fas fa-info-circle modal-info-icon"></i>
+        <div>
+          <h3 x-text="infoTitle"></h3>
+          <p x-text="infoMessage"></p>
         </div>
       </div>
-    </div>
-
-    <!-- Error Message Modal (hidden by default) -->
-    <div 
-      class="modal" 
-      x-show="showErrorModal" 
-      x-cloak
-    >
-      <!-- Dark Overlay -->
-      <div class="modal-overlay" @click="showErrorModal = false"></div>
-      <div class="modal-content">
-        <div style="display: flex; align-items: center; gap: 1rem;">
-          <!-- Error Icon -->
-          <i class="fas fa-exclamation-circle modal-error-icon"></i>
-          <div>
-            <h3 x-text="errorTitle"></h3>
-            <p x-text="errorMessage"></p>
-          </div>
-        </div>
-        <div class="modal-buttons">
-          <button class="pure-button pure-button-primary" @click="showErrorModal = false">OK</button>
-        </div>
+      <div class="modal-buttons">
+        <button class="pure-button pure-button-primary" @click="showInfoModal = false">OK</button>
       </div>
     </div>
+  </div>
+
+  <!-- Error Message Modal (hidden by default) -->
+  <div class="modal" x-show="showErrorModal" x-cloak>
+    <!-- Dark Overlay -->
+    <div class="modal-overlay" @click="showErrorModal = false"></div>
+    <div class="modal-content">
+      <div style="display: flex; align-items: center; gap: 1rem;">
+        <!-- Error Icon -->
+        <i class="fas fa-exclamation-circle modal-error-icon"></i>
+        <div>
+          <h3 x-text="errorTitle"></h3>
+          <p x-text="errorMessage"></p>
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button class="pure-button pure-button-primary" @click="showErrorModal = false">OK</button>
+      </div>
+    </div>
+  </div>
 
   <!-- System Section -->
   <section class="system-section pure-g">
@@ -603,4 +551,5 @@
     <p>&copy; 2025 GOODDATA LABS SLU. All rights reserved.</p>
   </footer>
 </body>
+
 </html>

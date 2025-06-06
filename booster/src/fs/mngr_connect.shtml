@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <!-- Important for mobile: ensures responsive scaling -->
@@ -8,33 +9,22 @@
   <title><!--#TITLEHDR--></title>
 
   <!-- Pure.css (CDN) -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
-    integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls"
-    crossorigin="anonymous"
-  />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
+    integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous" />
   <!-- Grid responsiveness (sm, md, lg classes) -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css"
-  />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />
   <link rel="stylesheet" href="styles.css?v=1.0" />
-  
+
   <!-- Font Awesome for icons (CDN) -->
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-    crossorigin="anonymous"
-    referrerpolicy="no-referrer"
-  />
-  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+
   <!-- Alpine.js -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 
   <script>
     function networkManager() {
-    return {
+      return {
         showPassword: false,
         password: '',
         errorMessage: '',
@@ -42,91 +32,91 @@
         ssid: '',
         auth: '',
         authstring: '',
-        
+
         init() {
-            const params = new URLSearchParams(window.location.search);
-            this.ssid = params.get('name') || 'N/A';
-            this.auth = params.get('auth') || 'N/A';
-            this.authstring = this.getAuthString(this.auth);
+          const params = new URLSearchParams(window.location.search);
+          this.ssid = params.get('name') || 'N/A';
+          this.auth = params.get('auth') || 'N/A';
+          this.authstring = this.getAuthString(this.auth);
         },
-        
+
         validatePassword() {
-            if (this.password.length > this.maxLength) {
-                this.errorMessage = `Password cannot exceed ${this.maxLength} characters.`;
-                this.password = this.password.substring(0, this.maxLength);
-            } else {
-                this.errorMessage = '';
-            }
+          if (this.password.length > this.maxLength) {
+            this.errorMessage = `Password cannot exceed ${this.maxLength} characters.`;
+            this.password = this.password.substring(0, this.maxLength);
+          } else {
+            this.errorMessage = '';
+          }
         },
 
         getAuthString(authcode) {
-                const code = parseInt(authcode, 10);
-                switch (code) {
-                  case 1:
-                  case 2: return "WPA_TKIP";
-                  case 3:
-                  case 4:
-                  case 5: return "WPA2_AES";
-                  case 6:
-                  case 7:
-                  case 8: return "WPA2_MIXED";
-                  default: return "OPEN";
-                }
-            },
+          const code = parseInt(authcode, 10);
+          switch (code) {
+            case 1:
+            case 2: return "WPA_TKIP";
+            case 3:
+            case 4:
+            case 5: return "WPA2_AES";
+            case 6:
+            case 7:
+            case 8: return "WPA2_MIXED";
+            default: return "OPEN";
+          }
+        },
 
         save() {
-            const params = [
-                {
-                    "name": "WIFI_SSID",
-                    "type": "STRING",
-                    "value": this.ssid
-                },
-                {
-                    "name": "WIFI_AUTH",
-                    "type": "INT",
-                    "value": this.auth
-                },
-                {
-                    "name": "WIFI_PASSWORD",
-                    "type": "STRING",
-                    "value": this.password
-                }
-            ];
+          const params = [
+            {
+              "name": "WIFI_SSID",
+              "type": "STRING",
+              "value": this.ssid
+            },
+            {
+              "name": "WIFI_AUTH",
+              "type": "INT",
+              "value": this.auth
+            },
+            {
+              "name": "WIFI_PASSWORD",
+              "type": "STRING",
+              "value": this.password
+            }
+          ];
 
-            console.log('Saving WiFi credentials:', params);
-            
-            const jsonStr = JSON.stringify(params);
-            const base64 = btoa(jsonStr);
-            const safeBase64 = encodeURIComponent(base64);
+          console.log('Saving WiFi credentials:', params);
 
-            fetch(`/saveparams.cgi?json=${base64}`, { 
-                method: "GET" 
-            })
+          const jsonStr = JSON.stringify(params);
+          const base64 = btoa(jsonStr);
+          const safeBase64 = encodeURIComponent(base64);
+
+          fetch(`/saveparams.cgi?json=${base64}`, {
+            method: "GET"
+          })
             .then(res => res.text())
             .then(text => {
-                try {
-                    const json = JSON.parse(text);
-                    if (json.status !== 200) {
-                        throw new Error(json.message || "Unknown error");
-                    }
-                    console.log("Parameters saved successfully:", json.message);
-                    window.location.href = "/reboot.cgi";
-                } catch (e) {
-                    console.error("Error processing response:", e);
-                    // Add error feedback here
+              try {
+                const json = JSON.parse(text);
+                if (json.status !== 200) {
+                  throw new Error(json.message || "Unknown error");
                 }
+                console.log("Parameters saved successfully:", json.message);
+                window.location.href = "/reboot.cgi";
+              } catch (e) {
+                console.error("Error processing response:", e);
+                // Add error feedback here
+              }
             })
             .catch(err => {
-                console.error("Network error:", err);
-                // Add network error feedback here
+              console.error("Network error:", err);
+              // Add network error feedback here
             });
         }
+      }
     }
-}
-</script>
+  </script>
 </head>
 
-<body x-data="networkManager()"  x-init="init()">
+<body x-data="networkManager()" x-init="init()">
 
   <!-- Blue Banner Header -->
   <header class="header">
@@ -148,57 +138,52 @@
         <li class="pure-menu-item">
           <a href="/mngr_config.shtml" class="pure-menu-link">Config</a>
         </li>
+        <li class="pure-menu-item">
+          <a href="https://docs.sidecartridge.com/sidecartridge-multidevice/#do-you-want-to-test-the-new-alpha-firmware"
+            target="_blank" class="pure-menu-link">Help</a>
+        </li>
       </ul>
     </div>
   </nav>
-  
+
   <!-- Main Content Area -->
   <main class="main-content">
     <h2>New Wifi configuration</h2>
     <p>Please enter the new credentials for the selected network.</p>
     <form @submit.prevent="save" class="pure-form">
-        <div class="system-item">
-            <div class="item-inner">
-                <div class="label-cell">SSID:</div>
-                <div class="value-cell" x-text="ssid"></div>
-            </div>
+      <div class="system-item">
+        <div class="item-inner">
+          <div class="label-cell">SSID:</div>
+          <div class="value-cell" x-text="ssid"></div>
         </div>
-        <div class="system-item">
-            <div class="item-inner">
-                <div class="label-cell">Auth mode:</div>
-                <div class="value-cell" x-text="authstring"></div>
-            </div>
+      </div>
+      <div class="system-item">
+        <div class="item-inner">
+          <div class="label-cell">Auth mode:</div>
+          <div class="value-cell" x-text="authstring"></div>
         </div>
-        <div class="system-item">
-            <div class="item-inner">
-                <div class="label-cell">Password:</div>
-                <div class="value-cell">
-                    <input 
-                        type="password" 
-                        x-model="password" 
-                        @input="validatePassword"
-                        :type="showPassword ? 'text' : 'password'"
-                        class="pure-input-1"
-                        placeholder="Enter your password"
-                        required
-                    >
-                    <span 
-                        class="toggle-link"
-                        @click="showPassword = !showPassword"
-                        x-text="showPassword ? 'Hide' : 'Show'"
-                    ></span>
-                </div>
-            </div>
+      </div>
+      <div class="system-item">
+        <div class="item-inner">
+          <div class="label-cell">Password:</div>
+          <div class="value-cell">
+            <input type="password" x-model="password" @input="validatePassword"
+              :type="showPassword ? 'text' : 'password'" class="pure-input-1" placeholder="Enter your password"
+              required>
+            <span class="toggle-link" @click="showPassword = !showPassword"
+              x-text="showPassword ? 'Hide' : 'Show'"></span>
+          </div>
         </div>
-        <div class="text-error" x-text="errorMessage"></div>
+      </div>
+      <div class="text-error" x-text="errorMessage"></div>
 
-        <div style="margin-top: 1.5rem;">
-            <p>Enter the password and click "Connect" to connect to the selected network.</p>
-            <button type="submit" class="pure-button pure-button-primary">
-                Connect
-            </button>
-        </div>
-    </form>    
+      <div style="margin-top: 1.5rem;">
+        <p>Enter the password and click "Connect" to connect to the selected network.</p>
+        <button type="submit" class="pure-button pure-button-primary">
+          Connect
+        </button>
+      </div>
+    </form>
   </main>
 
   <!-- Footer -->
@@ -206,4 +191,5 @@
     <p>&copy; 2025 GOODDATA LABS SLU. All rights reserved.</p>
   </footer>
 </body>
+
 </html>
