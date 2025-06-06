@@ -68,6 +68,17 @@ if [ -z ${3} ]; then
     exit 0
 fi
 
+# Build the image file
+echo "Building image file..."
+python merge_uf2.py ./build/placeholder.uf2 ./build/booster.uf2 ./dist/rp-booster-all.uf2
+
+# Rename the file to include the version number and the build type
+if [ "$BUILD_TYPE" = "release" ]; then
+    mv ./dist/rp-booster-all.uf2 ./dist/rp-booster-$VERSION-full.uf2
+else
+    mv ./dist/rp-booster-all.uf2 ./dist/rp-booster-$VERSION-$BUILD_TYPE-full.uf2
+fi
+ 
 # Done
 echo "Done"
 
