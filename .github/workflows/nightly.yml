@@ -60,7 +60,7 @@ jobs:
           - Build Date: ${{ steps.build.outputs.date }}
           - Version: ${{ env.RELEASE_VERSION }}
 
-          Read the [CHANGELOG](https://github.com/sidecartridge/rp2-booster-bootloader/blob/nightly/CHANGELOG.md) for more details on the changes included in this build.
+          Read the [CHANGELOG](https://github.com/sidecartridge/rp2-booster-bootloader/blob/main/CHANGELOG.md) for more details on the changes included in this build.
 
         file_glob: true
         overwrite: true
