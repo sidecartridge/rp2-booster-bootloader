@@ -277,7 +277,7 @@
       <ul class="pure-menu-list">
         <li class="pure-menu-item">
           <a href="/mngr_home.shtml" class="pure-menu-link">Apps</a>
-        </li>6
+        </li>
         <li class="pure-menu-item pure-menu-selected">
           <a href="#" class="pure-menu-link">Wifi</a>
         </li>
