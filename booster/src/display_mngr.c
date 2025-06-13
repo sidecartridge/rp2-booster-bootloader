@@ -34,7 +34,7 @@ void draw_connection_scr(const uint8_t qrcode_url[], const char *ssid,
                ssid_str);
 
   // Wifi status
-  display_mngr_wifi_change_status(wifi_status, url1, url2);
+  display_mngr_wifi_change_status(wifi_status, url1, url2, NULL);
 
   // Product info
   display_draw_product_info();
@@ -42,16 +42,16 @@ void draw_connection_scr(const uint8_t qrcode_url[], const char *ssid,
   // ByPass message
   u8g2_DrawStr(display_get_u8g2_ref(),
                LEFT_PADDING_FOR_CENTER(DISPLAY_MANAGER_BYPASS_MESSAGE, 68) * 5,
-               DISPLAY_HEIGHT - 8, DISPLAY_MANAGER_BYPASS_MESSAGE);
+               DISPLAY_HEIGHT - 9, DISPLAY_MANAGER_BYPASS_MESSAGE);
 }
 
 // Change the status in the buffer
-void display_mngr_change_status(uint8_t status) {
+void display_mngr_change_status(uint8_t status, const char *details) {
   // Use 8x8 font
   u8g2_SetFont(display_get_u8g2_ref(), u8g2_font_amstrad_cpc_extended_8f);
 
   // Status
-  char status_str[20] = {0};
+  char status_str[40] = {0};
   switch (status) {
     case 0:
       snprintf(status_str, sizeof(status_str), "Connecting to WIFI...");
@@ -60,7 +60,8 @@ void display_mngr_change_status(uint8_t status) {
       snprintf(status_str, sizeof(status_str), "      Connected!     ");
       break;
     case 2:
-      snprintf(status_str, sizeof(status_str), "  Error! Retrying... ");
+      snprintf(status_str, sizeof(status_str),
+               details != NULL ? details : "   Connection Error! ");
       break;
     default:
       snprintf(status_str, sizeof(status_str), "   Launching App...  ");
@@ -74,11 +75,16 @@ void display_mngr_change_status(uint8_t status) {
 
 // Change the wifi status in the buffer
 void display_mngr_wifi_change_status(uint8_t wifi_status, const char *url1,
-                                     const char *url2) {
+                                     const char *url2, const char *details) {
   // Wifi status
-  display_mngr_change_status(wifi_status);
+  display_mngr_change_status(wifi_status, details);
 
   if (wifi_status == 1) {
+    u8g2_SetDrawColor(display_get_u8g2_ref(), 0);
+    u8g2_DrawBox(display_get_u8g2_ref(), 0, DISPLAY_HEIGHT - 24, DISPLAY_WIDTH,
+                 8);
+    u8g2_SetDrawColor(display_get_u8g2_ref(), 1);
+
     // URL
     char url_str[72] = {0};
     snprintf(url_str, sizeof(url_str), "%s or %s", url1, url2);
@@ -93,12 +99,12 @@ void display_mngr_wifi_change_status(uint8_t wifi_status, const char *url1,
     u8g2_DrawStr(
         display_get_u8g2_ref(),
         LEFT_PADDING_FOR_CENTER(DISPLAY_MNGR_SELECT_RESET_MESSAGE, 68) * 5,
-        DISPLAY_HEIGHT - 16, DISPLAY_MNGR_SELECT_RESET_MESSAGE);
+        DISPLAY_HEIGHT - 17, DISPLAY_MNGR_SELECT_RESET_MESSAGE);
   } else {
     // Clear the error message
-    u8g2_DrawStr(display_get_u8g2_ref(),
-                 LEFT_PADDING_FOR_CENTER(DISPLAY_MNGR_EMPTY_MESSAGE, 68) * 5,
-                 DISPLAY_HEIGHT - 8, DISPLAY_MNGR_EMPTY_MESSAGE);
+    // u8g2_DrawStr(display_get_u8g2_ref(),
+    //              LEFT_PADDING_FOR_CENTER(DISPLAY_MNGR_EMPTY_MESSAGE, 68) * 5,
+    //              DISPLAY_HEIGHT - 8, DISPLAY_MNGR_EMPTY_MESSAGE);
   }
 }
 

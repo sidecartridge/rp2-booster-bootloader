@@ -13,6 +13,25 @@ static int wait_poll_interval_ms = 1000;
 static fabric_config_t fabric_config = {"", "", 0, false};
 static bool page_served = false;
 
+static void saveWifiParams() {
+  // Save the parameters
+  DPRINTF("Store all the parameters needed to start the BOOSTER in STA mode\n");
+  settings_put_string(gconfig_getContext(), PARAM_WIFI_SSID,
+                      fabric_config.ssid);
+  settings_put_string(gconfig_getContext(), PARAM_WIFI_PASSWORD,
+                      fabric_config.pass);
+  settings_put_integer(gconfig_getContext(), PARAM_WIFI_AUTH,
+                       fabric_config.auth);
+  settings_put_integer(gconfig_getContext(), PARAM_WIFI_MODE, WIFI_MODE_STA);
+  settings_put_string(gconfig_getContext(), PARAM_BOOT_FEATURE, "BOOSTER");
+  settings_save(gconfig_getContext(), true);
+  DPRINTF("STA parameters save. Reboot!\n");
+
+  // Send the reboot command
+  SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_RESET);
+  reset_device();
+}
+
 /**
  * @brief Sets the configuration for the fabric network.
  *
@@ -61,21 +80,89 @@ void fabric_served_callback() {
  * @return int Returns 0 on success, or an error code on failure.
  */
 int fabric_init() {
-  wifi_mode_t wifi_mode_value = WIFI_MODE_AP;
-  int err = network_wifiInit(wifi_mode_value);
-  if (err != 0) {
-    DPRINTF("Error initializing the network: %i\n", err);
-    blink_error();
-    return err;
+  // First, check if there is a Wifi configuration file in the microSD card.
+  // Initialize the SD card
+  FATFS fs;
+  int sdcard_err = sdcard_initFilesystem(&fs, "/");
+  bool scardInitialized = (sdcard_err == SDCARD_INIT_OK);
+  if (sdcard_err != SDCARD_INIT_OK) {
+    DPRINTF("Error initializing the SD card: %i\n", sdcard_err);
+  } else {
+    DPRINTF("SD card found & initialized\n");
   }
 
-  DPRINTF("WiFi mode is AP\n");
-  blink_on();
+  if (scardInitialized) {
+    // Check for the WiFi configuration file
+    // Check if the WiFi configuration file exists .wificonf
+    // Use FatFS to check if the file exists
+    // Review and fixes for WiFi config parse
 
-  // Start the HTTP server
-  fabric_httpd_start((fabric_httpd_callback_t)fabric_set_config,
-                     (fabric_httpd_served_callback_t)fabric_served_callback);
+    FIL file;
+    FRESULT res = f_open(&file, WIFI_CONFIG_FILE, FA_READ);
+    if (res == FR_OK) {
+      // File exists, read the configuration
+      char line[WIFI_CONFIG_LINE_MAX];
+      while (f_gets(line, sizeof(line), &file)) {
+        // Trim trailing newline/carriage return
+        size_t len = strlen(line);
+        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
+          line[--len] = '\0';
+        }
 
+        // Parse the line for SSID, password, and auth type
+        if (strncmp(line, SSID_PREFIX, PREFIX_LEN) == 0) {
+          // SSID: skip leading/trailing whitespace
+          char raw[MAX_SSID_LENGTH * 2];
+          strncpy(raw, line + PREFIX_LEN, sizeof(raw) - 1);
+          raw[sizeof(raw) - 1] = '\0';
+          bool valid = network_parseSSID(raw, fabric_config.ssid);
+          if (!valid) {
+            DPRINTF("Invalid SSID in config\n");
+          }
+          fabric_config.ssid[MAX_SSID_LENGTH - 1] = '\0';
+
+        } else if (strncmp(line, PASS_PREFIX, PREFIX_LEN) == 0) {
+          char raw[MAX_PASSWORD_LENGTH * 2];
+          strncpy(raw, line + PREFIX_LEN, sizeof(raw) - 1);
+          raw[sizeof(raw) - 1] = '\0';
+          bool valid = network_parsePassword(raw, fabric_config.pass);
+          if (!valid) {
+            DPRINTF("Invalid password in config\n");
+          }
+          fabric_config.pass[MAX_PASSWORD_LENGTH - 1] = '\0';
+
+        } else if (strncmp(line, AUTH_PREFIX, PREFIX_LEN) == 0) {
+          fabric_config.auth = atoi(line + PREFIX_LEN);
+        }
+      }
+      f_close(&file);
+      fabric_config.is_set = true;
+      DPRINTF("WiFi configuration loaded from SD card\n");
+    } else {
+      DPRINTF("No WiFi configuration file found on SD card\n");
+    }
+  }
+
+  if (!fabric_config.is_set) {
+    wifi_mode_t wifi_mode_value = WIFI_MODE_AP;
+    int err = network_wifiInit(wifi_mode_value);
+    if (err != 0) {
+      DPRINTF("Error initializing the network: %i\n", err);
+      blink_error();
+      return err;
+    }
+
+    DPRINTF("WiFi mode is AP\n");
+    blink_on();
+
+    // Start the HTTP server
+    fabric_httpd_start((fabric_httpd_callback_t)fabric_set_config,
+                       (fabric_httpd_served_callback_t)fabric_served_callback);
+  } else {
+    DPRINTF("Network configuration found: SSID: %s, Pass: %s, Auth: %i\n",
+            fabric_config.ssid, fabric_config.pass, fabric_config.auth);
+    saveWifiParams();
+  }
   return 0;
 }
 
@@ -165,22 +252,5 @@ void fabric_loop() {
 
   // Wait for the page before rebooting
   sleep_ms(wait_poll_interval_ms);
-
-  // Save the parameters
-  DPRINTF("Store all the parameters needed to start the BOOSTER in STA mode\n");
-  settings_put_string(gconfig_getContext(), PARAM_WIFI_SSID,
-                      fabric_config.ssid);
-  settings_put_string(gconfig_getContext(), PARAM_WIFI_PASSWORD,
-                      fabric_config.pass);
-  settings_put_integer(gconfig_getContext(), PARAM_WIFI_AUTH,
-                       fabric_config.auth);
-  settings_put_integer(gconfig_getContext(), PARAM_WIFI_MODE, WIFI_MODE_STA);
-  settings_put_string(gconfig_getContext(), PARAM_BOOT_FEATURE, "BOOSTER");
-  settings_save(gconfig_getContext(), true);
-  DPRINTF("STA parameters save. Reboot!\n");
-
-  // Send the reboot command
-  SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_RESET);
-  sleep_ms(1000);
-  reset_device();
+  saveWifiParams();
 }

@@ -52,6 +52,14 @@ sdcard_status_t sdcard_initFilesystem(FATFS *fsPtr, const char *folderName) {
   }
   DPRINTF("Filesystem mounted.\n");
 
+  // If the folder name is NULL, "" or "/", then simply
+  // return SDCARD_INIT_OK, as no folder is needed.
+  if (folderName == NULL || folderName[0] == '\0' ||
+      strcmp(folderName, "/") == 0) {
+    DPRINTF("No folder name provided. Returning SDCARD_INIT_OK.\n");
+    return SDCARD_INIT_OK;
+  }
+
   // Now check if the folder exists in the SD card
   bool folderExists = sdcard_dirExist(folderName);
   DPRINTF("Folder exists: %s\n", folderExists ? "true" : "false");

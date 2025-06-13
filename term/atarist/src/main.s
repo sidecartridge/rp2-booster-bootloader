@@ -215,6 +215,9 @@ start_rom_code:
 	move.l #((FRAMEBUFFER_SIZE / 2) -1), d0			; Set the number of words to copy
 .copy_screen_low:
 	move.w (a1)+ , d1			; Copy a word from the cartridge ROM
+	ifne DISPLAY_BYPASS_FRAMEBUFFER == 1
+	rol.w #8, d1				; swap high and low bytes
+	endif
 	move.w d1, d2				; Copy the word to d2
 	swap d2						; Swap the bytes
 	move.w d1, d2				; Copy the word to d2

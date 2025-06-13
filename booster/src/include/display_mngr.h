@@ -26,7 +26,8 @@
 #define DISPLAY_MNGR_QR_SCALE 5
 
 #define DISPLAY_MNGR_SELECT_RESET_MESSAGE \
-  "If the device can't connect to your WiFi, restart pressing SELECT"
+  "If can't connect to your WiFi, press SELECT for 10 seconds to restart."
+
 #define DISPLAY_MNGR_EMPTY_MESSAGE                                             \
   "                                                                          " \
   "      "
@@ -39,7 +40,7 @@
 
 void display_mngr_start(const char *ssid, const char *url1, const char *url2);
 void display_mngr_wifi_change_status(uint8_t wifi_status, const char *url1,
-                                     const char *url2);
-void display_mngr_change_status(uint8_t status);
+                                     const char *url2, const char *details);
+void display_mngr_change_status(uint8_t status, const char *details);
 
 #endif  // DISPLAY_MNGR_H

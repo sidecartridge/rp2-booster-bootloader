@@ -10,12 +10,44 @@
 
 #define WIFI_PASS_BUFSIZE 64
 static char *ssid = NULL;
-static char *pass = NULL;
+static char pass[WIFI_PASS_BUFSIZE];
 static int auth = -1;
 static void *current_connection;
 static void *valid_connection;
 static fabric_httpd_callback_t set_config_callback;
 static fabric_httpd_served_callback_t set_served_callback = NULL;
+
+// Decodes a URI-escaped string (percent-encoded) into its original value.
+// E.g., "My%20SSID%21" -> "My SSID!"
+// Returns true on success. Always null-terminates output.
+// Output buffer must be at least outLen bytes.
+// Returns false if input is NULL, output is NULL, or output buffer is too
+// small.
+static bool url_decode(const char *in, char *out, size_t outLen) {
+  if (!in || !out || outLen == 0) return false;
+
+  DPRINTF("Decoding '%s'. Length=%d\n", in, outLen);
+  size_t o = 0;
+  for (size_t i = 0; in[i] && o < outLen - 1; ++i) {
+    if (in[i] == '%' && isxdigit((unsigned char)in[i + 1]) &&
+        isxdigit((unsigned char)in[i + 2])) {
+      // Decode %xx
+      char hi = in[i + 1], lo = in[i + 2];
+      int high = (hi >= 'A' ? (toupper(hi) - 'A' + 10) : (hi - '0'));
+      int low = (lo >= 'A' ? (toupper(lo) - 'A' + 10) : (lo - '0'));
+      out[o++] = (char)((high << 4) | low);
+      i += 2;
+    } else if (in[i] == '+') {
+      // Optionally decode + as space (common in x-www-form-urlencoded)
+      out[o++] = ' ';
+    } else {
+      out[o++] = in[i];
+    }
+  }
+  out[o] = '\0';
+  DPRINTF("Decoded to '%s'. Size: %d\n", out, o + 1);
+  return true;
+}
 
 /**
  * @brief Array of SSI tags for the HTTP server.
@@ -266,11 +298,14 @@ err_t httpd_post_receive_data(void *connection, struct pbuf *p) {
       if ((len_pass > 0) && (len_pass < WIFI_PASS_BUFSIZE)) {
         /* provide contiguous storage if p is a chained pbuf */
         char buf_pass[WIFI_PASS_BUFSIZE];
-        pass = (char *)pbuf_get_contiguous(p, buf_pass, sizeof(buf_pass),
-                                           len_pass, value_pass);
-        if (pass) {
+        char *rawPass = (char *)pbuf_get_contiguous(
+            p, buf_pass, sizeof(buf_pass), len_pass, value_pass);
+        rawPass[len_pass] = '\0';
+        DPRINTF("Password raw: %s\n", rawPass);
+        if (rawPass) {
+          bool valid = url_decode(rawPass, pass, len_pass + 1);
+          DPRINTF("Bad encoding: %s\n", valid ? "No" : "Yes");
           valid_connection = connection;
-          pass[len_pass] = 0;
           DPRINTF("Password: %s\n", pass);
         }
       }
