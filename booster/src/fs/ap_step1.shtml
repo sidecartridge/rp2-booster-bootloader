@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <!-- Important for mobile: ensures responsive scaling -->
@@ -15,6 +16,16 @@
             background-color: #f4f4f9;
             color: #333;
         }
+
+        /* Terminal-style fixed-width font */
+        .terminal-text {
+            font-family: "Courier New", Courier, monospace;
+            background-color: #1e1e1e;
+            color: #dcdcdc;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
         .container {
             width: 90%;
             max-width: 800px;
@@ -24,6 +35,7 @@
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
         }
+
         /* Header Styles */
         .header {
             background-color: #0078e7;
@@ -32,31 +44,38 @@
             text-align: center;
             border-radius: 8px 8px 0 0;
         }
+
         .header h1 {
             margin: 0;
             font-size: 24px;
         }
+
         /* Section Styles */
         section {
             margin-bottom: 20px;
         }
+
         section h2 {
             font-size: 20px;
             margin-bottom: 10px;
             color: #0078e7;
         }
+
         section p {
             line-height: 1.6;
             margin-bottom: 10px;
         }
+
         /* List Styles */
         ol {
             margin-left: 20px;
             margin-bottom: 10px;
         }
+
         ol li {
             margin-bottom: 5px;
         }
+
         /* Button Styles */
         button {
             background-color: #0078e7;
@@ -67,9 +86,11 @@
             cursor: pointer;
             border-radius: 4px;
         }
+
         button:hover {
             background-color: #005bb5;
         }
+
         /* Footer Styles */
         .footer {
             text-align: center;
@@ -83,16 +104,19 @@
             .header h1 {
                 font-size: 20px;
             }
+
             section h2 {
                 font-size: 18px;
             }
+
             button {
                 font-size: 14px;
                 padding: 8px 16px;
             }
         }
-</style>
+    </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -101,12 +125,30 @@
         <section>
             <h2>First Install</h2>
             <p>Welcome to <!--#TITLEHDR-->!</p>
-            <p>To start using the device, you must connect to an existing Wi-Fi network operating at 2.4 GHz. The device will not work with 5 GHz networks. You will have to provide a password for the network. You can provide the password with these two options:</p>
+            <p>To start using the device, you must connect to an existing Wi-Fi network operating at 2.4 GHz. The device
+                will not work with 5 GHz networks. You will have to provide a password for the network. You can provide
+                the password with these two options:</p>
             <ol>
                 <li>Enter the password using the on-screen keyboard and this browser interface.</li>
-                <li>Save your password in a file named ".wifipass" in the root folder of the microSD card.</li>
+                <li>Create and configure a '.wificonf' file in the root folder of the microSD card.</li>
             </ol>
-            <p>After selecting your Wi-Fi network and entering the password, the device will reboot and the operation of the device will start.</p>
+            <p>If you opt for the first option, after selecting your Wi-Fi network and entering the password, the
+                device will reboot and the operation of the device will start.</p>
+            <p>&nbsp;</p>
+            <p>
+                If you opt for the '.wificonf' file mode, copy this template and substitute the parameters with your own
+                SSID, password and WiFi authentication security type. Then reboot the device after inserting the microSD
+                card with the file. It will automatically start in the management mode, bypassing the "dual QR" screen.
+            <div class="terminal-text">
+                <pre>SSID=[YOUR SSID]
+PASS=[YOUR PASS]
+; AUTH values. Use only numeric value
+OPEN=0
+WPA_TKIP_PSK=1
+WPA2_AES_PSK=5
+WPA2_MIXED_PSK=8
+AUTH=[YOUR AUTH MODE]</pre>
+            </div>
         </section>
         <section>
             <h2>Choose the Wi-Fi Network</h2>
@@ -115,7 +157,7 @@
                 <!--#WIFINETS-->
             </div>
             <div>
-                <br/>
+                <br />
                 <button onclick="location.reload()">Refresh</button>
             </div>
         </section>
@@ -124,4 +166,5 @@
         </div>
     </div>
 </body>
+
 </html>
