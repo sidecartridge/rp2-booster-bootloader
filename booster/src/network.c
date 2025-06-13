@@ -181,7 +181,11 @@ bool network_parsePassword(const char *password, char *outPassword) {
   // Check: Not empty, not all spaces, not all filtered out
   if (outLen == 0) return false;
   for (size_t i = 0; i < outLen; ++i) {
-    if (outPassword[i] != ' ') return true;
+    if (outPassword[i] != ' ') {
+      // Ensure password length is at least 8 characters
+      if (outLen >= 8) return true;
+      return false;
+    }
   }
   return false;
 }
