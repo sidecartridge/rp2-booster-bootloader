@@ -140,14 +140,30 @@ int mngr_init() {
   }
 
   // Connect to the WiFi network
+  int numRetries = 3;
   err = NETWORK_WIFI_STA_CONN_ERR_TIMEOUT;
-  while (err == NETWORK_WIFI_STA_CONN_ERR_TIMEOUT) {
+  while (err != NETWORK_WIFI_STA_CONN_OK) {
     err = network_wifiStaConnect();
-    if ((err > 0) && (err < NETWORK_WIFI_STA_CONN_ERR_TIMEOUT)) {
+    if (err < 0) {
       DPRINTF("Error connecting to the WiFi network: %i\n", err);
-      blink_error();
-      display_mngr_wifi_change_status(2, NULL, NULL);  // Error
-      return err;
+      DPRINTF("Number of retries left: %i\n", numRetries);
+      if (--numRetries <= 0) {
+        DPRINTF("Max retries reached. Exiting...\n");
+        display_mngr_wifi_change_status(2, NULL, NULL,
+                                        "Max retries reached. Exiting...");
+        display_refresh();
+        blink_error();
+        sleep_ms(1000);
+        return err;
+      } else {
+        display_mngr_wifi_change_status(
+            2, NULL, NULL, network_WifiStaConnStatusString(err));  // Error
+        display_refresh();
+      }
+      sleep_ms(3000);  // Wait before retrying
+      display_mngr_wifi_change_status(0, NULL, NULL,
+                                      NULL);  // Reset to connecting status
+      display_refresh();
     }
   }
   DPRINTF("WiFi connected\n");
@@ -170,7 +186,7 @@ int mngr_init() {
   appmngr_print_apps_lookup_table(table, table_length);
   free(table);
 
-  display_mngr_wifi_change_status(1, url_host, url_ip);
+  display_mngr_wifi_change_status(1, url_host, url_ip, NULL);
   display_refresh();
 
   // Init the download apps
@@ -304,7 +320,7 @@ int mngr_init() {
       }
     } else if (appmngr_get_launch_status() == DOWNLOAD_LAUNCHAPP_SCHEDULED) {
       appmngr_set_launch_status(DOWNLOAD_LAUNCHAPP_INPROGRESS);
-      display_mngr_change_status(4);  // Launching app message
+      display_mngr_change_status(4, NULL);  // Launching app message
       display_refresh();
       launch_time = make_timeout_time_ms(5 * 1000);  // 5 seconds to launch
       DPRINTF("Launching app in 5 seconds\n");
