@@ -236,7 +236,7 @@ void display_draw_product_info() {
   snprintf(product_str, sizeof(product_str), "%s %s - %s", DISPLAY_PRODUCT_MSG,
            RELEASE_VERSION, DISPLAY_COPYRIGHT_MESSAGE);
   u8g2_DrawStr(&u8g2, LEFT_PADDING_FOR_CENTER(product_str, 68) * 6,
-               DISPLAY_HEIGHT, product_str);
+               DISPLAY_HEIGHT - 1, product_str);
 }
 
 void display_generate_mask_table(uint32_t memory_address) {
