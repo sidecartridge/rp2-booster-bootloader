@@ -257,6 +257,53 @@ const char* network_getAuthTypeStringShort(uint16_t connect_code);
  */
 ip_addr_t network_getCurrentIp();
 
+/**
+ * @brief Parses and cleans up an SSID string.
+ *
+ * This function processes the input SSID and ensures it meets the required
+ * standard: it is truncated to MAX_SSID_LENGTH if it exceeds the maximum length
+ * and cleaned up if it does not comply with the standard format.
+ *
+ * @param ssid    Pointer to the input null-terminated SSID string.
+ * @param outSSID Pointer to the output character array where the parsed and
+ * cleaned SSID is stored. The caller is responsible for ensuring this buffer is
+ * sufficiently allocated.
+ *
+ * @return true if the SSID is valid after parsing and cleaning, false
+ * otherwise.
+ */
+bool network_parseSSID(const char* ssid, char* outSSID);
+
+/**
+ * @brief Parses and cleans up a WiFi network password according to the IEEE
+ * 802.11 standard.
+ *
+ * This function processes the provided password string by truncating it if it
+ * exceeds WIFI_AP_PASS_MAX_LENGTH. The cleaned and possibly truncated password
+ * is stored in outPassword.
+ *
+ * @param password The original WiFi network password string.
+ * @param outPassword The buffer where the cleaned up password is written.
+ * @return true if the password is valid, false otherwise.
+ */
+bool network_parsePassword(const char* password, char* outPassword);
+
+/**
+ * @brief Returns a human-readable string for the WiFi station connection
+ * process status.
+ *
+ * This function converts a wifi_sta_conn_process_status_t enumeration value
+ * into a descriptive string for easier interpretation and debugging of WiFi
+ * connection statuses.
+ *
+ * @param status The current WiFi station connection process status.
+ *
+ * @return A constant character pointer to the string representing the given
+ * status.
+ */
+const char* network_WifiStaConnStatusString(
+    wifi_sta_conn_process_status_t status);
+
 #endif
 
 #endif  // NETWORK_H
