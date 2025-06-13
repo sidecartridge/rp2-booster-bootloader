@@ -24,7 +24,7 @@ static fabric_httpd_served_callback_t set_served_callback = NULL;
 // Returns false if input is NULL, output is NULL, or output buffer is too
 // small.
 static bool url_decode(const char *in, char *out, size_t outLen) {
-  if (!in || outLen == 0) return false;
+  if (!in || !out || outLen == 0) return false;
 
   DPRINTF("Decoding '%s'. Length=%d\n", in, outLen);
   size_t o = 0;
@@ -44,7 +44,7 @@ static bool url_decode(const char *in, char *out, size_t outLen) {
       out[o++] = in[i];
     }
   }
-  out[o + 1] = '\0';
+  out[o] = '\0';
   DPRINTF("Decoded to '%s'. Size: %d\n", out, o + 1);
   return true;
 }
