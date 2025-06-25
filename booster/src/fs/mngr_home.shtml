@@ -41,11 +41,15 @@
         init() {
           if (this.initialized) return;
           this.initialized = true;
-          // 1) Fetch remote apps.json
-          fetch("<!--#APPSURL-->")
+
+          // Generate a cache-busting random string
+          const randomParam = Math.random().toString(36).substring(2) + Date.now().toString(36);
+          const url = `<!--#APPSURL-->?c=${randomParam}`;
+
+          // 1) Fetch remote apps.json with cache-busting param
+          fetch(url)
             .then((response) => response.json())
             .then((data) => {
-              // Suppose the JSON looks like { "apps": [...] }
               this.apps = data.apps || [];
 
               // 2) Fetch local apps
@@ -53,7 +57,7 @@
             })
             .catch((error) => {
               console.error("Error fetching remote apps:", error);
-              this.fetchError = true; // set flag on error
+              this.fetchError = true;
               this.fetchLocalAppsFirst();
             });
         },
@@ -215,6 +219,7 @@
             return;
           }
           // Prepare JSON
+          selectedApp.description = ""; // Clear description to avoid size issues
           const jsonStr = JSON.stringify(selectedApp);
           // Base64 encode
           const base64 = btoa(jsonStr);
@@ -245,6 +250,7 @@
             return;
           }
           // Prepare JSON
+          selectedApp.description = ""; // Clear description to avoid size issues
           const jsonStr = JSON.stringify(selectedApp);
           // Base64 encode
           const base64 = btoa(jsonStr);
@@ -389,7 +395,7 @@
             <h3 x-text="app.name"></h3>
             <h4 x-text="app.version"></h4>
             <!-- App Description -->
-            <p x-text="app.description"></p>
+            <p x-html="app.description"></p>
             <!-- Combined Tags in one line -->
             <div class="tags-row">
               <!-- App Tags -->

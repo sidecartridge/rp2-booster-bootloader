@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.0.4alpha (2025-06-13) - Alpha release
+
+This is a rolling alpha release. It may include new features, bugs, and issues. Bug and issue tracking is not yet available as this is not a public release. This is a development version.
+
+### Changes
+- **Disabled USB Mass storage in Booster**: The USB Mass Storage feature has been disabled in the Booster firmware to prevent potential issues with device stability and performance.
+- **Display HTML description**: Now the description accepts HTML tags, allowing for more flexible and rich text formatting in the device description field.
+- **Stay in Booster mode**: The device will now remain in Booster mode after a reboot, ensuring that users can continue to use the Booster features without needing to re-enter the mode.
+
+### New features
+No new features in this release.
+
+### Fixes
+No fixes in this release.
+
 ## v2.0.3alpha (2025-06-13) - Alpha release
 
 This is a rolling alpha release. Except new features, bugs and issues. No tracking yet of bugs and issues since there is no public release yet. This is a development version.
