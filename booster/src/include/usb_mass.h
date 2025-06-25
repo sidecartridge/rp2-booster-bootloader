@@ -27,7 +27,7 @@
 #include "hardware/resets.h"
 
 #define USBDRIVE_READ_ONLY false
-#define USBDRIVE_MASS_STORE true
+#define USBDRIVE_MASS_STORE false
 
 #undef TUD_OPT_HIGH_SPEED
 #define TUD_OPT_HIGH_SPEED false
