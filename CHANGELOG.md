@@ -2,7 +2,7 @@
 
 ## v2.0.4alpha (2025-06-13) - Alpha release
 
-This is a rolling alpha release. Except new features, bugs and issues. No tracking yet of bugs and issues since there is no public release yet. This is a development version.
+This is a rolling alpha release. It may include new features, bugs, and issues. Bug and issue tracking is not yet available as this is not a public release. This is a development version.
 
 ### Changes
 - **Disabled USB Mass storage in Booster**: The USB Mass Storage feature has been disabled in the Booster firmware to prevent potential issues with device stability and performance.
