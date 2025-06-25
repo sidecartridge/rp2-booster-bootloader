@@ -129,8 +129,7 @@ int main() {
     }
     // BOOSTER Manager mode
     // Force to set the BOOSTER boot feature
-    (Temporaly disabled) settings_put_string(gconfig_getContext(),
-                                             PARAM_BOOT_FEATURE, "BOOSTER");
+    settings_put_string(gconfig_getContext(), PARAM_BOOT_FEATURE, "BOOSTER");
     settings_save(gconfig_getContext(), true);
     sleep_ms(100);  // Wait for the settings to be saved
     DPRINTF("Boot feature set to BOOSTER\n");
