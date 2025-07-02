@@ -316,7 +316,8 @@
       app.
     </p>
     <p>
-      To launch an app, simply click the LAUNCH button. To return to this page, click the SELECT button on the device.
+      To launch an app, simply click the LAUNCH button. To return to this page, click the SELECT button on the device
+      and follow the instructions in your computer
     </p>
 
     <!-- No SD card found. -->
@@ -379,7 +380,7 @@
     <section class="app-list pure-g" x-show="loaded_apps" x-transition>
       <!-- Loop through apps -->
       <template x-for="app in apps" :key="app.uuid">
-        <div class="app-row pure-g">
+        <div class="app-row pure-g" :class="{ 'update-available': app.update }">
 
           <!-- Left-hand side: App Image (1/6 on md) -->
           <!--
