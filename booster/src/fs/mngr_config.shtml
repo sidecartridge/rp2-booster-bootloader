@@ -137,17 +137,19 @@
           <div class="pure-u-1 pure-u-md-2-3">
             <!-- String Input -->
             <template x-if="param.type === 'STRING'">
-              <input type="text" class="pure-input-1" x-model="param.value" maxlength="128">
+              <input type="text" class="pure-input-1" x-model="param.value" maxlength="128"
+                x-bind:title="param.placeholder">
             </template>
 
             <!-- Number Input -->
             <template x-if="param.type === 'INT'">
-              <input type="number" class="pure-input-1" x-model="param.value" min="0" max="65535">
+              <input type="number" class="pure-input-1" x-model="param.value" min="0" max="65535"
+                x-bind:title="param.placeholder">
             </template>
 
             <!-- Boolean Select -->
             <template x-if="param.type === 'BOOL'">
-              <select class="pure-input-1" x-model="param.value">
+              <select class="pure-input-1" x-model="param.value" x-bind:title="param.placeholder">
                 <option value="Yes">Yes</option>
                 <option value="No">No</option>
               </select>
