@@ -5,6 +5,21 @@
 This is a rolling alpha release. It may include new features, bugs, and issues. Bug and issue tracking is not yet available as this is not a public release. This is a development version.
 
 ### Changes
+- **Highlight microfirmware updates available**: The system will now highlight available microfirmware updates, making it easier for users to identify and apply important updates.
+
+- **Remove Safe SELECT reboot option**: The Safe SELECT reboot option has been removed from the configuration settings. Not needed anymore.
+
+### New features
+No new features in this release.
+
+### Fixes
+- **Display tooltips for configuration options**: Tooltips did not display for various configuration options, providing users with helpful information and guidance when making changes.
+
+## v2.0.4alpha (2025-06-13) - Alpha release
+
+This is a rolling alpha release. It may include new features, bugs, and issues. Bug and issue tracking is not yet available as this is not a public release. This is a development version.
+
+### Changes
 - **Disabled USB Mass storage in Booster**: The USB Mass Storage feature has been disabled in the Booster firmware to prevent potential issues with device stability and performance.
 - **Display HTML description**: Now the description accepts HTML tags, allowing for more flexible and rich text formatting in the device description field.
 - **Stay in Booster mode**: The device will now remain in Booster mode after a reboot, ensuring that users can continue to use the Booster features without needing to re-enter the mode.
