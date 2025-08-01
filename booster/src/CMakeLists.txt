@@ -165,6 +165,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     no-OS-FatFS-SD-SDIO-SPI-RPi-Pico                # FATFS library   
     pico_lwip                # lwIP library
     pico_lwip_http           # lwIP httpd library
+    pico_lwip_mdns           # lwIP mDNS library
     pico_mbedtls             # mbedTLS library
     pico_multicore           # Multicore support
     pico_stdlib              # Core functionality
@@ -241,7 +242,7 @@ if(NOT DEFINED RELEASE_DATE)
 endif()
 
 if (NOT DEFINED _DEBUG)
-        set(_DEBUG 0)
+        set(_DEBUG 1)
 endif()
 
 # Debug outputs
