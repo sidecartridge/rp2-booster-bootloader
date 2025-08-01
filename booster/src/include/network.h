@@ -40,6 +40,7 @@
 #include <string.h>
 
 #include "hardware/clocks.h"
+#include "lwip/apps/mdns.h"
 #include "pico/stdlib.h"
 
 #define NETWORK_POLLING_INTERVAL 100  // 100 ms
