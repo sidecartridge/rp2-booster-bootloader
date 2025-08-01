@@ -110,9 +110,9 @@ int mngr_init() {
       settings_find_entry(gconfig_getContext(), PARAM_HOSTNAME)->value;
   char url_host[128] = {0};
   if ((hostname != NULL) && (strlen(hostname) > 0)) {
-    snprintf(url_host, sizeof(url_host), "http://%s", hostname);
+    snprintf(url_host, sizeof(url_host), "http://%s.local", hostname);
   } else {
-    snprintf(url_host, sizeof(url_host), "http://%s", "sidecart");
+    snprintf(url_host, sizeof(url_host), "http://%s.local", "sidecart");
   }
 
   char url_ip[128] = {0};

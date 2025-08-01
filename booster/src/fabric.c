@@ -193,7 +193,7 @@ void fabric_loop() {
   char url_gw[128] = {0};
   snprintf(url_gw, sizeof(url_gw), "http://%s", WIFI_AP_GATEWAY);
   char url_host[128] = {0};
-  snprintf(url_host, sizeof(url_host), "http://%s", WIFI_AP_HOSTNAME);
+  snprintf(url_host, sizeof(url_host), "http://%s.local", WIFI_AP_HOSTNAME);
   set_dhcp_server_cb(fabric_httpd_get_ip);
   const char *authType = network_getAuthTypeStringShort(WIFI_AP_AUTH);
   display_fabric_start(WIFI_AP_SSID, WIFI_AP_PASS, authType, url_gw, url_host);
