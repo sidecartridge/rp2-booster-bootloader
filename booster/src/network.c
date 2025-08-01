@@ -587,7 +587,7 @@ wifi_sta_conn_process_status_t network_wifiStaConnect() {
   // Setup mdns
   mdns_resp_init();
   DPRINTF("mDNS host name %s.local\n", wifiHostname);
-  mdns_resp_add_netif(nif, hostname);
+  mdns_resp_add_netif(nif, wifiHostname);
   mdns_resp_add_service(nif, "sidecart_httpd", "_http", DNSSD_PROTO_TCP, 80,
                         srv_txt, NULL);
 #endif
