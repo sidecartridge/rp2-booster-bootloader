@@ -1,6 +1,18 @@
 # Changelog
 
-## v2.0.4alpha (2025-06-13) - Alpha release
+## v2.0.6alpha (2025-08-XX) - Alpha release
+
+This is a rolling alpha release. It may include new features, bugs, and issues. Bug and issue tracking is not yet available as this is not a public release. This is a development version.
+
+### Changes
+- **Show information in the web app when launched app**: The web app will now display relevant information and tips when launched, helping users to get started quickly and easily.
+
+### New features
+- **mDNS support**: The web app now supports mDNS (Multicast DNS), allowing for easier discovery and connection to devices on the local network. Now the site "sidecart.local" is accessible via mDNS. Previously it was only through DHCP plus DNS, which small routers from telecom providers often struggle with.
+
+### Fixes
+
+## v2.0.5alpha (2025-07-02) - Alpha release
 
 This is a rolling alpha release. It may include new features, bugs, and issues. Bug and issue tracking is not yet available as this is not a public release. This is a development version.
 
