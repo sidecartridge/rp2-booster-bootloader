@@ -543,6 +543,16 @@ const char *network_WifiStaConnStatusString(
   }
 }
 
+#if LWIP_MDNS_RESPONDER
+static void srv_txt(struct mdns_service *service, void *txt_userdata) {
+  err_t res;
+  LWIP_UNUSED_ARG(txt_userdata);
+
+  res = mdns_resp_add_service_txtitem(service, "path=/", 6);
+  LWIP_ERROR("mdns add service txt failed\n", (res == ERR_OK), return);
+}
+#endif
+
 wifi_sta_conn_process_status_t network_wifiStaConnect() {
   if (!cyw43Initialized) {
     DPRINTF("WiFi not initialized. Cancelling connection\n");
@@ -572,6 +582,15 @@ wifi_sta_conn_process_status_t network_wifiStaConnect() {
   }
   DPRINTF("Hostname: %s\n", wifiHostname);
   netif_set_hostname(nif, wifiHostname);
+
+#if LWIP_MDNS_RESPONDER
+  // Setup mdns
+  mdns_resp_init();
+  DPRINTF("mDNS host name %s.local\n", wifiHostname);
+  mdns_resp_add_netif(nif, wifiHostname);
+  mdns_resp_add_service(nif, "sidecart_httpd", "_http", DNSSD_PROTO_TCP, 80,
+                        srv_txt, NULL);
+#endif
 
   // Set callbacks
   netif_set_link_callback(nif, wifiLinkCallback);
