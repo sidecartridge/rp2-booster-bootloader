@@ -80,6 +80,25 @@ void fabric_served_callback() {
  * @return int Returns 0 on success, or an error code on failure.
  */
 int fabric_init() {
+  // LEt's clean the flash memory starting in the
+  unsigned int config_flash_length = (unsigned int)&_global_lookup_flash_start -
+                                     (unsigned int)&_config_flash_start;
+  unsigned int global_lookup_flash_length = FLASH_SECTOR_SIZE;
+  unsigned int global_config_flash_length = FLASH_SECTOR_SIZE;
+  unsigned int total_config_flash_length = config_flash_length +
+                                           global_lookup_flash_length +
+                                           global_config_flash_length;
+  DPRINTF(
+      "Erasing configuration and lookup tables starting at 0x%08X for %d "
+      "bytes\n",
+      (unsigned int)&_config_flash_start, total_config_flash_length);
+  // Erase the configuration and lookup tables previously used
+  uint32_t ints = save_and_disable_interrupts();
+  flash_range_erase((unsigned int)&_config_flash_start - XIP_BASE,
+                    total_config_flash_length);
+  restore_interrupts(ints);
+  DPRINTF("Configuration and lookup tables erased\n");
+
   // First, check if there is a Wifi configuration file in the microSD card.
   // Initialize the SD card
   FATFS fs;
