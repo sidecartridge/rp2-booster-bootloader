@@ -12,9 +12,9 @@ Combines two UF2 files so that:
    the first file and the start of the second file (if any).
 3. **All blocks from the second file** are copied after the gap.
 4. **Zero-filled UF2 blocks** are generated from the end of the second file up
-   to the end of the 2MB flash region (0x101F_FFFF inclusive).
-5. Block numbers are re-written so that every block from 0x1000_0000 to
-   0x101F_FFFF is represented and `blockNum` runs continuously from 0 to
+    to the end of the flash region used here (0x101E0000 inclusive).
+5. Block numbers are re-written so that every block from 0x10000000 to
+   0x101E0000 is represented and `blockNum` runs continuously from 0 to
    *N - 1* with `numBlocks == N` for every block.
 
 Usage
@@ -24,7 +24,7 @@ Usage
 **Assumptions**
 * The first UF2 occupies a lower flash region than the second. If the two
   overlap or appear out of order, the script aborts with an error.
-* The board is RP2040-style with flash from 0x1000_0000 to 0x101F_FFFF.
+* The board is RP2040-style with the region considered from 0x1000_0000 to 0x101E0000.
 """
 
 # ────────── UF2 constants ──────────
@@ -37,7 +37,7 @@ UF2_MAGIC_START   = 0x0A324655
 UF2_MAGIC_END     = 0x0AB16F30  # Typical trailing marker
 
 FLASH_BASE_ADDR   = 0x10000000
-FLASH_END_ADDR    = 0x101FFFFF  # 2 MB inclusive end address
+FLASH_END_ADDR    = 0x101E0000  # Inclusive end address for this build
 
 # ────────── UF2 block helper ──────────
 class UF2Block:
