@@ -171,4 +171,9 @@ bool appmngr_fnext(char *json);
 void appmngr_init();
 void appmngr_deinit();
 
+// Synchronize the apps lookup table with JSON files in the apps folder.
+// Scans all .json files (excluding apps.json), parses them, and ensures each
+// app UUID exists in the lookup table; missing entries are added.
+void appmngr_sync_lookup_table();
+
 #endif  // APPMNGR_H

@@ -1,4 +1,3 @@
-
 #include "appmngr.h"
 
 static sdcard_info_t sdcard_info = {false, 0, 0, false};
@@ -1037,6 +1036,104 @@ static int8_t appmngr_persist_app_lookup_table(const uint8_t *table,
   DPRINTF("Persisted.\n");
 
   return 0;
+}
+
+// -----------------------------------------------------------------------------
+// Sync lookup table with JSON files on SD card
+// -----------------------------------------------------------------------------
+void appmngr_sync_lookup_table() {
+  // 1) Load current lookup table into RAM buffer
+  uint8_t table[4096];  // Enough for ~107 entries (4096/38)
+  memset(table, 0, sizeof(table));
+  uint16_t table_len = 0;
+  appmngr_load_apps_lookup_table(table, &table_len);
+  bool changed = false;
+
+  // 2) Open apps folder from settings
+  char apps_folder[256] = {0};
+  snprintf(apps_folder, sizeof(apps_folder), "%s",
+           settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value);
+
+  DIR dir;
+  FRESULT res = f_opendir(&dir, apps_folder);
+  if (res != FR_OK) {
+    DPRINTF("sync: cannot open apps folder %s (err=%d)\n", apps_folder, res);
+    return;
+  }
+
+  FILINFO fno;
+  for (;;) {
+    res = f_readdir(&dir, &fno);
+    if (res != FR_OK || fno.fname[0] == '\0') break;  // end
+
+    // Skip the catalog file and non-.json files
+    if (strcmp(fno.fname, "apps.json") == 0) continue;
+    char *ext = strrchr(fno.fname, '.');
+    if (!ext || strcasecmp(ext, ".json") != 0) continue;
+
+    // Base name must be 36-char UUID
+    char base[64];
+    strncpy(base, fno.fname, sizeof(base));
+    base[sizeof(base) - 1] = '\0';
+    char *dot = strrchr(base, '.');
+    if (dot) *dot = '\0';
+    if (strlen(base) != 36) continue;
+    if (!is_valid_uuid4(base)) continue;
+
+    // Check if already present in table
+    int16_t page = appmngr_get_page_number_for_uuid(base, table, table_len);
+    if (page >= 0) {
+      // Already present
+      continue;
+    }
+
+    // Parse the JSON to populate app_info using existing code
+    char path[256];
+    snprintf(path, sizeof(path), "%s/%s", apps_folder, fno.fname);
+
+    FIL fil;
+    if (f_open(&fil, path, FA_READ) != FR_OK) {
+      DPRINTF("sync: cannot open %s\n", path);
+      continue;
+    }
+    // Read file content into buffer
+    char json_buf[MAXIMUM_APP_INFO_SIZE];
+    UINT br = 0;
+    FRESULT rr = f_read(&fil, json_buf, sizeof(json_buf) - 1, &br);
+    f_close(&fil);
+    if (rr != FR_OK) {
+      DPRINTF("sync: cannot read %s (err=%d)\n", path, rr);
+      continue;
+    }
+    json_buf[br] = '\0';
+
+    if (set_app_info(json_buf) != DOWNLOAD_OK) {
+      DPRINTF("sync: parse failed for %s\n", path);
+      continue;
+    }
+
+    // app_info.uuid should now be set; add a new entry with next free sector
+    int16_t next_sector =
+        appmngr_find_first_empty_config_sector(table, &table_len);
+    if (next_sector < 0) next_sector = 0;  // fallback
+
+    if (appmngr_update_lookup_table(app_info.uuid, (uint16_t)next_sector, table,
+                                    &table_len) == 0) {
+      DPRINTF("sync: added %.*s -> sector %d\n", 36, app_info.uuid,
+              next_sector);
+      changed = true;
+    } else {
+      DPRINTF("sync: failed to add %.*s\n", 36, app_info.uuid);
+    }
+  }
+  f_closedir(&dir);
+
+  // 3) Persist any updates
+  if (changed) {
+    appmngr_persist_app_lookup_table(table, table_len);
+  } else {
+    DPRINTF("sync: no changes, nothing to persist\n");
+  }
 }
 
 /*
