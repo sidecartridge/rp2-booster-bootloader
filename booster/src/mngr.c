@@ -179,13 +179,6 @@ int mngr_init() {
 
   snprintf(url_ip, sizeof(url_ip), "http://%s", ip4addr_ntoa(&ip));
 
-  // appmngr load table
-  uint8_t *table = malloc(FLASH_SECTOR_SIZE);
-  uint16_t table_length = 0;
-  appmngr_load_apps_lookup_table(table, &table_length);
-  appmngr_print_apps_lookup_table(table, table_length);
-  free(table);
-
   display_mngr_wifi_change_status(1, url_host, url_ip, NULL);
   display_refresh();
 
@@ -228,6 +221,21 @@ int mngr_init() {
             sdcard_dirExist(apps_folder);
       }
       sdcard_ready = true;
+
+      // appmngr load table
+      uint8_t *table = malloc(FLASH_SECTOR_SIZE);
+      uint16_t table_length = 0;
+      appmngr_load_apps_lookup_table(table, &table_length);
+      appmngr_print_apps_lookup_table(table, table_length);
+
+      // Now, try to sync the apps lookup table with the JSON files
+      appmngr_sync_lookup_table();
+
+      // appmngr load table
+      memset(table, 0, FLASH_SECTOR_SIZE);
+      appmngr_load_apps_lookup_table(table, &table_length);
+      appmngr_print_apps_lookup_table(table, table_length);
+      free(table);
     } else {
       DPRINTF("Error initializing the SD card: %i\n", sdcard_err);
     }
