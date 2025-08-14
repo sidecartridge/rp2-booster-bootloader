@@ -28,8 +28,9 @@ git checkout tags/v3.6.2
 cd ..
 
 # This is a dirty hack to guarantee that I can use the fatfs-sdk submodule
-echo "Patching the fatfs-sdk... to use chmod"
-sed -i.bak 's/#define FF_USE_CHMOD[[:space:]]*0/#define FF_USE_CHMOD 1/' fatfs-sdk/src/include/ffconf.h && mv fatfs-sdk/src/include/ffconf.h.bak .
+#echo "Patching the fatfs-sdk... to use chmod"
+#sed -i.bak 's/#define FF_USE_CHMOD[[:space:]]*0/#define FF_USE_CHMOD 1/' fatfs-sdk/src/include/ffconf.h && mv fatfs-sdk/src/include/ffconf.h.bak .
+#sed -i.bak 's/#define FF_FS_TINY[[:space:]]*0/#define FF_FS_TINY 1/' fatfs-sdk/src/include/ffconf.h && mv fatfs-sdk/src/include/ffconf.h.bak2 .
 
 # Set the environment variables of the SDKs
 export PICO_SDK_PATH=$PWD/pico-sdk
