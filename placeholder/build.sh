@@ -40,8 +40,9 @@ export RELEASE_DATE=$(date +"%Y-%m-%d %H:%M:%S")
 echo "Release date: $RELEASE_DATE"
 
 # Set the board type to be used for building
-# If nothing passed as first argument, use pico_w
-export BOARD_TYPE=${1:-pico_w}
+# If nothing passed as first argument, use pico
+# Use pico instead if pico_w to reduce the footprint
+export BOARD_TYPE=${1:-pico}
 export PICO_BOARD=$BOARD_TYPE
 echo "Board type: $BOARD_TYPE"
 
@@ -73,8 +74,6 @@ echo "Building the project"
 
 cd build
 cmake ../src -DCMAKE_BUILD_TYPE=$BUILD_TYPE
-#cmake ../src -DCMAKE_BUILD_TYPE=CustomBuild
-#cmake ../src -DCMAKE_BUILD_TYPE=Debug
 make -j4 
 
 # Copy the built firmware to the /dist folder
