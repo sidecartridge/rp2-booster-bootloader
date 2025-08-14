@@ -17,7 +17,11 @@ _Static_assert(DISPLAY_BUFFER_SIZE <= UINT32_MAX,
                "Buffer size exceeds allowed limits");
 
 // Allocate the framebuffer
+#if DISPLAY_BYPASS_FRAMEBUFFER == 0
 static unsigned char u8g2_buffer[DISPLAY_BUFFER_SIZE] = {0};
+#else
+static unsigned char *u8g2_buffer = NULL;
+#endif
 
 // Global u8g2 structure
 static u8g2_t u8g2 = {0};
@@ -187,8 +191,16 @@ void display_create_qr(uint8_t qrcode[], const char *text) {
 
 // Initialize u8g2 with the custom buffer
 void display_setup_u8g2() {
+  DPRINTF("Display Bypass framebuffer? %s\n",
+          DISPLAY_BYPASS_FRAMEBUFFER ? "YES" : "NO");
+
+#if DISPLAY_BYPASS_FRAMEBUFFER == 1
+  u8g2_buffer =
+      (void *)((unsigned int)&__rom_in_ram_start__ + DISPLAY_BUFFER_OFFSET);
+#else
   DPRINTF("Initializing u8g2 with a buffer size of %d bytes\n",
           DISPLAY_BUFFER_SIZE);
+#endif
 
   set_display_address((unsigned int)&__rom_in_ram_start__ +
                       DISPLAY_BUFFER_OFFSET);
@@ -197,6 +209,7 @@ void display_setup_u8g2() {
                               DISPLAY_COMMAND_ADDRESS_OFFSET);
   set_displays_highres_transtable_address((unsigned int)&__rom_in_ram_start__ +
                                           DISPLAY_HIGHRES_TRANSTABLE_OFFSET);
+  DPRINTF("Display buffer address: 0x%08x\n", (unsigned int)u8g2_buffer);
   DPRINTF("Display command address: 0x%08x\n", get_display_command_address());
   DPRINTF("Highres translation table address: 0x%08x\n",
           get_displays_highres_transtable_address());
@@ -224,9 +237,11 @@ void display_setup_u8g2() {
 }
 
 void display_refresh() {
+#if DISPLAY_BYPASS_FRAMEBUFFER == 0
   uint32_t *display_buffer = (void *)get_display_address();
   COPY_AND_SWAP_16BIT_DMA(display_buffer, (uint16_t *)u8g2_buffer,
                           DISPLAY_BUFFER_SIZE);
+#endif
 }
 
 void display_draw_product_info() {
