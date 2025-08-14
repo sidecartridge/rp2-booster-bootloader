@@ -65,28 +65,30 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
-        python3 <<'EOF'
-import os
-import boto3
+        python3 <<EOF
+        import os
+        import boto3
 
-s3 = boto3.client('s3')
-release_dir = 'dist'
-bucket_name = 'atarist.sidecartridge.com'
+        s3 = boto3.client('s3')
+        release_dir = 'dist'
+        bucket_name = 'atarist.sidecartridge.com'
 
-files_to_upload = [
-  ('SIDECARTVERSION', 'text/plain'),
-  ('upgrade.bin', 'application/octet-stream'),
-]
+        files_to_upload = [
+          ('SIDECARTVERSION', 'text/plain'),
+          ('upgrade.bin', 'application/octet-stream'),
+        ]
 
-for fname, content_type in files_to_upload:
-  local_path = os.path.join(release_dir, fname)
-  if not os.path.isfile(local_path):
-    print(f"Skipping {fname}: not found at {local_path}")
-    continue
-  s3_path = fname
-  print(f"Uploading {local_path} to s3://{bucket_name}/{s3_path}")
-  s3.upload_file(
-    local_path, bucket_name, s3_path,
-    ExtraArgs={"ContentType": content_type}
-  )
-EOF
+        for fname, content_type in files_to_upload:
+          local_path = os.path.join(release_dir, fname)
+          if not os.path.isfile(local_path):
+            print(f"Skipping {fname}: not found at {local_path}")
+            continue
+          s3_path = fname  # upload at bucket root
+          print(f"Uploading {local_path} to s3://{bucket_name}/{s3_path}")
+          s3.upload_file(
+            local_path,
+            bucket_name,
+            s3_path,
+            ExtraArgs={"ContentType": content_type}
+          )
+        EOF
