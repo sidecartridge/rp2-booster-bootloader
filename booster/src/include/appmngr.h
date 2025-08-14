@@ -146,17 +146,31 @@ void appmngr_set_download_update(bool update);
 
 download_delete_err_t appmngr_delete_app(const char *uuid);
 download_launch_err_t appmngr_launch_app();
-download_err_t appmngr_start_download_app();
+download_err_t appmngr_start_download(const char *url);
 download_poll_t appmngr_poll_download_app();
 download_err_t appmngr_finish_download_app();
 download_status_t appmngr_get_download_status();
 download_err_t appmngr_get_download_error();
+
+download_status_t appmngr_get_download_firmware_status();
+void appmngr_download_firmware_status(download_status_t status);
+download_err_t appmngr_get_download_firmware_error();
+void appmngr_download_firmware_error(download_err_t err);
+
 const char *appmngr_get_download_error_str();
 download_launch_err_t appmngr_get_launch_status();
 download_err_t appmngr_confirm_download_app();
 download_err_t appmngr_confirm_failed_download_app();
 void appmngr_download_status(download_status_t status);
 void appmngr_download_error(download_err_t err);
+
+download_err_t __not_in_flash_func(appmngr_confirm_download_firmware)();
+download_err_t appmngr_finish_download_firmware();
+download_err_t appmngr_confirm_failed_download_firmware();
+void appmngr_firmwareUpgradeStart(void);
+void mngr_firmwareUpgradeClean(void);
+void mngr_firmwareUpgradeInstall(void);
+
 void appmngr_set_launch_status(download_launch_err_t status);
 download_catalog_err_t appmngr_create_app_catalog();
 void appmngr_schedule_launch_app(const char *uuid);

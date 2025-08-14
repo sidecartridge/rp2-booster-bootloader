@@ -1,11 +1,22 @@
 #include "appmngr.h"
 
+#include "upgrader_firmware.h"
+
+// Create an enum for the type of download
+typedef enum { DOWNLOAD_TYPE_APP, DOWNLOAD_TYPE_FIRMWARE } download_type_t;
+
+static download_type_t download_type = DOWNLOAD_TYPE_APP;
 static sdcard_info_t sdcard_info = {false, 0, 0, false};
 static app_info_t app_info = {0};
 static FIL file;
 static download_status_t download_status = DOWNLOAD_STATUS_IDLE;
+static download_status_t download_firmware_status = DOWNLOAD_STATUS_IDLE;
 static download_err_t download_error = DOWNLOAD_OK;
+static download_err_t download_firmware_error = DOWNLOAD_OK;
 static HTTPC_REQUEST_T request = {0};
+// Persistent storage for async HTTP request strings to avoid dangling pointers
+static char request_host_buf[256];
+static char request_uri_buf[512];
 static DIR s_dir;
 static bool s_dir_opened = false;
 static char s_folder[256];
@@ -90,6 +101,8 @@ static int parse_url(const char *url, url_components_t *components) {
   } else {
     // No URI, only host
     strncpy(components->host, host_start, sizeof(components->host) - 1);
+    components->uri[0] = '/';
+    components->uri[1] = '\0';
   }
 
   return 0;  // Success
@@ -311,104 +324,103 @@ int appmngr_delete_app_info() {
 }
 
 // Save body to file
-err_t http_client_receive_file_fn(__unused void *arg,
-                                  __unused struct altcp_pcb *conn,
-                                  struct pbuf *p, err_t err) {
-  // Check for null input or errors
+static err_t http_client_receive_file_fn(__unused void *arg,
+                                         __unused struct altcp_pcb *conn,
+                                         struct pbuf *p, err_t err) {
   if (p == NULL) {
     DPRINTF("End of data or connection closed by the server.\n");
-    download_status = DOWNLOAD_STATUS_COMPLETED;
-    return ERR_OK;  // Signal the connection closure
+    if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
+      download_firmware_status = DOWNLOAD_STATUS_COMPLETED;
+    } else {
+      download_status = DOWNLOAD_STATUS_COMPLETED;
+    }
+    return ERR_OK;
   }
 
   if (err != ERR_OK) {
     DPRINTF("Error receiving file: %i\n", err);
-    download_status = DOWNLOAD_STATUS_FAILED;
-    return ERR_VAL;  // Invalid input or error occurred
+    if (download_type == DOWNLOAD_TYPE_FIRMWARE)
+      download_firmware_status = DOWNLOAD_STATUS_FAILED;
+    else
+      download_status = DOWNLOAD_STATUS_FAILED;
+    pbuf_free(p);
+    return err;
   }
 
-  // Allocate buffer to hold pbuf content
-  char *buffc = malloc(p->tot_len);
-  if (buffc == NULL) {
-    DPRINTF("Error allocating memory\n");
-    download_status = DOWNLOAD_STATUS_FAILED;
-    return ERR_MEM;  // Memory allocation failed
+  // Stream the pbuf chain to file: no malloc, no large copies
+  FRESULT fres = FR_OK;
+  for (struct pbuf *q = p; q != NULL; q = q->next) {
+    UINT bw = 0;
+    fres = f_write(&file, q->payload, q->len, &bw);
+    if (fres != FR_OK || bw != q->len) {
+      DPRINTF("Error writing to file: %i (wrote %u of %u)\n", fres,
+              (unsigned)bw, q->len);
+      if (download_type == DOWNLOAD_TYPE_FIRMWARE)
+        download_firmware_status = DOWNLOAD_STATUS_FAILED;
+      else
+        download_status = DOWNLOAD_STATUS_FAILED;
+      pbuf_free(p);
+      return ERR_ABRT;
+    }
   }
 
-  // Use pbuf_copy_partial to copy the pbuf content to the buffer
-  pbuf_copy_partial(p, buffc, p->tot_len, 0);
-
-  // Write the buffer to the file. File descriptor is 'file'
-  FRESULT res;
-  UINT bytes_written;
-  res = f_write(&file, buffc, p->tot_len, &bytes_written);
-
-  // Free the allocated memory
-  free(buffc);
-
-  // Check for file write errors
-  if (res != FR_OK || bytes_written != p->tot_len) {
-    DPRINTF("Error writing to file: %i\n", res);
-    download_status = DOWNLOAD_STATUS_FAILED;
-    return ERR_ABRT;  // Abort on failure
-  }
-
-  // Acknowledge that we received the data
 #if BOOSTER_DOWNLOAD_HTTPS == 1
   altcp_recved(conn, p->tot_len);
 #else
   tcp_recved(conn, p->tot_len);
 #endif
-
-  // Free the pbuf
   pbuf_free(p);
 
-  download_status = DOWNLOAD_STATUS_IN_PROGRESS;
+  if (download_type == DOWNLOAD_TYPE_FIRMWARE)
+    download_firmware_status = DOWNLOAD_STATUS_IN_PROGRESS;
+  else
+    download_status = DOWNLOAD_STATUS_IN_PROGRESS;
   return ERR_OK;
 }
 
 // Function to parse headers and check Content-Length
-err_t http_client_header_check_size_fn(__unused httpc_state_t *connection,
-                                       __unused void *arg, struct pbuf *hdr,
-                                       u16_t hdr_len,
-                                       __unused u32_t content_len) {
-  download_status = DOWNLOAD_STATUS_FAILED;
-  const char *content_length_label = "Content-Length:";
-  u16_t offset = 0;
-  char *header_data = malloc(hdr_len + 1);
+static err_t http_client_header_check_size_fn(
+    __unused httpc_state_t *connection, __unused void *arg, struct pbuf *hdr,
+    u16_t hdr_len, __unused u32_t content_len) {
+  size_t max_allowed =
+      (download_type == DOWNLOAD_TYPE_FIRMWARE)
+          ? MAXIMUM_APP_UF2_SIZE
+          : MAXIMUM_APP_INFO_SIZE;  // or another cap for app files
 
-  if (header_data == NULL) {
-    return ERR_MEM;  // Memory allocation failed
+  char buf[512];
+  u16_t copy = hdr_len < sizeof(buf) - 1 ? hdr_len : (sizeof(buf) - 1);
+  pbuf_copy_partial(hdr, buf, copy, 0);
+  buf[copy] = '\0';
+
+  const char *label = "Content-Length:";
+  char *p = buf;
+  while (p && *p) {
+    char *eol = strstr(p, "\r\n");
+    size_t line_len = eol ? (size_t)(eol - p) : strlen(p);
+    if (line_len >= strlen(label) &&
+        strncasecmp(p, label, strlen(label)) == 0) {
+      const char *num = p + strlen(label);
+      while (*num == ' ' || *num == '\t') ++num;
+      unsigned long cl = strtoul(num, NULL, 10);
+      if (cl > max_allowed) {
+        DPRINTF("Content-Length too large: %lu > %u\n", cl,
+                (unsigned)max_allowed);
+        if (download_type == DOWNLOAD_TYPE_FIRMWARE)
+          download_firmware_status = DOWNLOAD_STATUS_FAILED;
+        else
+          download_status = DOWNLOAD_STATUS_FAILED;
+        return ERR_VAL;
+      }
+      break;
+    }
+    p = eol ? (eol + 2) : NULL;
   }
 
-  // Copy header data into a buffer for parsing
-  pbuf_copy_partial(hdr, header_data, hdr_len, 0);
-  header_data[hdr_len] = '\0';  // Null-terminate the string
-
-  // Find the Content-Length header
-  char *content_length_start = strstr(header_data, content_length_label);
-  if (content_length_start != NULL) {
-    content_length_start +=
-        strlen(content_length_label);  // Move past "Content-Length:"
-
-    // Skip leading spaces
-    while (*content_length_start == ' ') {
-      content_length_start++;
-    }
-
-    // Convert the Content-Length value to an integer
-    size_t content_length = strtoul(content_length_start, NULL, 10);
-
-    // Check if the size exceeds the maximum allowed
-    if (content_length > MAXIMUM_APP_UF2_SIZE) {
-      free(header_data);  // Free allocated memory
-      return ERR_VAL;     // Return error for size exceeding limit
-    }
-  }
-
-  free(header_data);  // Free allocated memory
-  download_status = DOWNLOAD_STATUS_IN_PROGRESS;
-  return ERR_OK;  // Header check passed
+  if (download_type == DOWNLOAD_TYPE_FIRMWARE)
+    download_firmware_status = DOWNLOAD_STATUS_IN_PROGRESS;
+  else
+    download_status = DOWNLOAD_STATUS_IN_PROGRESS;
+  return ERR_OK;
 }
 
 static void http_client_result_complete_fn(void *arg,
@@ -420,15 +432,30 @@ static void http_client_result_complete_fn(void *arg,
           httpc_result, rx_content_len, srv_res, err);
   req->complete = true;
   if (err == ERR_OK) {
-    download_status = DOWNLOAD_STATUS_COMPLETED;
-    download_error = DOWNLOAD_OK;
+    if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
+      download_firmware_status = DOWNLOAD_STATUS_COMPLETED;
+      download_firmware_error = DOWNLOAD_OK;
+    } else {
+      download_status = DOWNLOAD_STATUS_COMPLETED;
+      download_error = DOWNLOAD_OK;
+    }
   } else {
-    download_status = DOWNLOAD_STATUS_FAILED;
-    download_error = DOWNLOAD_HTTP_ERROR;
+    if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
+      download_firmware_status = DOWNLOAD_STATUS_FAILED;
+      download_firmware_error = DOWNLOAD_HTTP_ERROR;
+    } else {
+      download_status = DOWNLOAD_STATUS_FAILED;
+      download_error = DOWNLOAD_HTTP_ERROR;
+    }
   }
   if (srv_res != 200) {
-    download_status = DOWNLOAD_STATUS_FAILED;
-    download_error = DOWNLOAD_HTTP_ERROR;
+    if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
+      download_firmware_status = DOWNLOAD_STATUS_FAILED;
+      download_firmware_error = DOWNLOAD_HTTP_ERROR;
+    } else {
+      download_status = DOWNLOAD_STATUS_FAILED;
+      download_error = DOWNLOAD_HTTP_ERROR;
+    }
   }
 }
 
@@ -575,6 +602,22 @@ download_err_t appmngr_get_download_error() { return download_error; }
 
 void appmngr_download_error(download_err_t err) { download_error = err; }
 
+download_status_t appmngr_get_download_firmware_status() {
+  return download_firmware_status;
+}
+
+void appmngr_download_firmware_status(download_status_t status) {
+  download_firmware_status = status;
+}
+
+download_err_t appmngr_get_download_firmware_error() {
+  return download_firmware_error;
+}
+
+void appmngr_download_firmware_error(download_err_t err) {
+  download_firmware_error = err;
+}
+
 const char *appmngr_get_download_error_str() {
   switch (download_error) {
     case DOWNLOAD_OK:
@@ -613,29 +656,25 @@ const char *appmngr_get_download_error_str() {
 }
 
 static int8_t appmngr_delete_config_sector(uint8_t sector) {
-  // Delete the sector in the flash memory
   uint32_t flash_start = (uint32_t)&_config_flash_start;
-  uint32_t config_flash_length = (unsigned int)&_global_lookup_flash_start -
-                                 (unsigned int)&_config_flash_start;
-
-  // Calculate the number of 4KB sectors
+  uint32_t config_flash_length =
+      (uint32_t)&_global_lookup_flash_start - (uint32_t)&_config_flash_start;
   uint32_t num_sectors = config_flash_length / FLASH_SECTOR_SIZE;
 
-  // Print the number of sectors
-  DPRINTF("Config Flash start: 0x%X, length: %u bytes, sectors: %u\n",
-          flash_start, config_flash_length, num_sectors);
-
-  if (sector < 0 || sector >= num_sectors) {
-    DPRINTF("Invalid sector %d\n", sector);
-    return -1;  // Error
+  if (sector >= num_sectors) {
+    DPRINTF("Invalid sector %u (max=%u)\n", sector,
+            num_sectors ? (unsigned)(num_sectors - 1) : 0);
+    return -1;
   }
 
-  // Erase the sector
-  uint32_t ints = save_and_disable_interrupts();
-  flash_range_erase(flash_start - XIP_BASE, FLASH_SECTOR_SIZE);  // 4 Kbytes
-  restore_interrupts(ints);
+  uint32_t offs =
+      (flash_start - XIP_BASE) + (uint32_t)sector * FLASH_SECTOR_SIZE;
+  DPRINTF("Erase config sector %u at offset 0x%08X\n", sector, offs);
 
-  return 0;  // Success
+  uint32_t ints = save_and_disable_interrupts();
+  flash_range_erase(offs, FLASH_SECTOR_SIZE);
+  restore_interrupts(ints);
+  return 0;
 }
 
 /**
@@ -1006,35 +1045,28 @@ static int16_t appmngr_find_first_empty_config_sector(uint8_t *table,
 
 static int8_t appmngr_persist_app_lookup_table(const uint8_t *table,
                                                uint16_t table_length) {
-  // Persist the table in the flash memory
   uint32_t flash_start = (uint32_t)&_global_lookup_flash_start;
-  uint32_t config_flash_length = (unsigned int)&_global_config_flash_start -
-                                 (unsigned int)&_global_lookup_flash_start;
+  uint32_t config_flash_length = (uint32_t)&_global_config_flash_start -
+                                 (uint32_t)&_global_lookup_flash_start;
 
-  // Calculate the number of 4KB sectors
-  uint32_t num_sectors = config_flash_length / FLASH_SECTOR_SIZE;
-
-  // Print the number of sectors
-  DPRINTF(
-      "Persist App Lookup Table at Flash start: 0x%X, length: %u bytes, "
-      "sectors: %u\n",
-      flash_start, config_flash_length, num_sectors);
-
-  // Erase the sector
+  // Erase the whole region that stores the table (or at least the first sector)
   uint32_t ints = save_and_disable_interrupts();
-  flash_range_erase(flash_start - XIP_BASE, FLASH_SECTOR_SIZE);  // 4 Kbytes
+  flash_range_erase(flash_start - XIP_BASE, FLASH_SECTOR_SIZE);
 
-  // Round the table_length to the higher 256 bytes chunk value
-  uint16_t roundup_table_length =
-      ((table_length + FLASH_PAGE_SIZE) / FLASH_PAGE_SIZE) * FLASH_PAGE_SIZE;
+  const uint32_t PAGE = FLASH_PAGE_SIZE;
+  uint32_t wrote = 0;
+  uint8_t pagebuf[FLASH_PAGE_SIZE];
 
-  // Transfer app lookup table to FLASH
-  flash_range_program(flash_start - XIP_BASE, table, roundup_table_length);
-
+  while (wrote < table_length) {
+    uint32_t chunk = table_length - wrote;
+    if (chunk > PAGE) chunk = PAGE;
+    memset(pagebuf, 0x00,
+           PAGE);  // choose your erased-fill; 0x00 is fine for table
+    memcpy(pagebuf, table + wrote, chunk);
+    flash_range_program((flash_start - XIP_BASE) + wrote, pagebuf, PAGE);
+    wrote += chunk;
+  }
   restore_interrupts(ints);
-
-  DPRINTF("Persisted.\n");
-
   return 0;
 }
 
@@ -1440,6 +1472,7 @@ void appmngr_schedule_launch_app(const char *uuid) {
   if (uuid) {
     launch_status = DOWNLOAD_LAUNCHAPP_SCHEDULED;
     strncpy(launch_app_uuid, uuid, sizeof(launch_app_uuid));
+    launch_app_uuid[sizeof(launch_app_uuid) - 1] = '\0';
   }
 }
 
@@ -1504,7 +1537,7 @@ download_launch_err_t appmngr_launch_app() {
   return DOWNLOAD_LAUNCHAPP_OK;
 }
 
-download_err_t appmngr_start_download_app() {
+download_err_t appmngr_start_download(const char *url) {
   // Download the app binary from the URL in the app_info struct
   // The binary is saved to the SD card in the apps folder
   // The filename must be the UUID of the app with the .bin extension
@@ -1555,18 +1588,33 @@ download_err_t appmngr_start_download_app() {
     return DOWNLOAD_CANNOTOPENFILE_ERROR;
   }
 
-  download_status = DOWNLOAD_STATUS_STARTED;
-  download_error = DOWNLOAD_OK;
   // Get the components of a url
   url_components_t components;
-  if (parse_url(app_info.binary, &components) != 0) {
-    DPRINTF("Error parsing URL\n");
-    return DOWNLOAD_CANNOTPARSEURL_ERROR;
+  if (url == NULL || strlen(url) == 0) {
+    if (parse_url(app_info.binary, &components) != 0) {
+      DPRINTF("Error parsing URL of app_info.binary: %s\n", app_info.binary);
+      return DOWNLOAD_CANNOTPARSEURL_ERROR;
+    }
+    download_type = DOWNLOAD_TYPE_APP;
+    download_status = DOWNLOAD_STATUS_STARTED;
+    download_error = DOWNLOAD_OK;
+  } else {
+    if (parse_url(url, &components) != 0) {
+      DPRINTF("Error parsing URL of url arg: %s\n", url);
+      return DOWNLOAD_CANNOTPARSEURL_ERROR;
+    }
+    download_type = DOWNLOAD_TYPE_FIRMWARE;
+    download_firmware_status = DOWNLOAD_STATUS_STARTED;
+    download_firmware_error = DOWNLOAD_OK;
   }
-  // request.hostname = "tosemulator.sidecartridge.com";
-  // request.url = "/sidecartridge-tos-emutos-192k-v2.1.0.uf2";
-  request.url = components.uri;
-  request.hostname = components.host;
+  // Copy host and URI into persistent buffers (components is on stack)
+  snprintf(request_host_buf, sizeof(request_host_buf), "%s", components.host);
+  snprintf(request_uri_buf, sizeof(request_uri_buf), "%s", components.uri);
+
+  request = (HTTPC_REQUEST_T){0};
+  request.complete = false;
+  request.hostname = request_host_buf;
+  request.url = request_uri_buf;
   DPRINTF("HOST: %s. URI: %s\n", components.host, components.uri);
   request.headers_fn = http_client_header_check_size_fn;
   request.recv_fn = http_client_receive_file_fn;
@@ -1585,6 +1633,12 @@ download_err_t appmngr_start_download_app() {
     if (res != FR_OK) {
       DPRINTF("Error closing file %s: %i\n", filename, res);
     }
+#if BOOSTER_DOWNLOAD_HTTPS == 1
+    if (request.tls_config) {
+      altcp_tls_free_config(request.tls_config);
+      request.tls_config = NULL;
+    }
+#endif
     return DOWNLOAD_CANNOTSTARTDOWNLOAD_ERROR;
   }
   return DOWNLOAD_OK;
@@ -1593,7 +1647,7 @@ download_err_t appmngr_start_download_app() {
 download_poll_t appmngr_poll_download_app() {
   if (!request.complete) {
     async_context_poll(cyw43_arch_async_context());
-    async_context_wait_for_work_ms(cyw43_arch_async_context(), 100);
+    async_context_wait_for_work_ms(cyw43_arch_async_context(), 10);
     return DOWNLOAD_POLL_CONTINUE;
   }
   return DOWNLOAD_POLL_COMPLETED;
@@ -1622,7 +1676,7 @@ static download_err_t calculate_md5_of_tmp_file(MD5Context *md5_ctx) {
   UINT bytes_read;
 
   do {
-    res = f_read(&md5_file, buffer, sizeof(buffer), &bytes_read);
+    res = f_read(&md5_file, buffer, 4096, &bytes_read);
     if (res != FR_OK) {
       DPRINTF("Error reading file %s for MD5 calculation: %i\n", filename, res);
       f_close(&md5_file);
@@ -1749,6 +1803,8 @@ download_err_t appmngr_finish_download_app() {
     return DOWNLOAD_OK;
   } else {
     DPRINTF("Download is an update, not deleting the config sector.\n");
+    free(table);
+    return DOWNLOAD_OK;
   }
 }
 
@@ -1798,23 +1854,111 @@ download_err_t appmngr_confirm_download_app() {
 }
 
 download_err_t appmngr_confirm_failed_download_app() {
-  // // Delete tmp files due to failed download
-  // char tmp_json_filename[256] = {0};
-  // snprintf(tmp_json_filename, sizeof(tmp_json_filename), "%s/tmp.json",
-  //          settings_find_entry(gconfig_getContext(),
-  //          PARAM_APPS_FOLDER)->value);
-  // char tmp_binary_filename[256] = {0};
-  // snprintf(tmp_binary_filename, sizeof(tmp_binary_filename),
-  // "%s/tmp.download",
-  //          settings_find_entry(gconfig_getContext(),
-  //          PARAM_APPS_FOLDER)->value);
+  return DOWNLOAD_STATUS_FAILED;
+}
 
-  // // Try to delete the files if they exist
-  // f_unlink(tmp_json_filename);
-  // f_unlink(tmp_binary_filename);
+download_err_t appmngr_finish_download_firmware() {
+  // Close the file
+  int res = f_close(&file);
+  if (res != FR_OK) {
+    DPRINTF("Error closing tmp file %s: %i\n", res);
+    return DOWNLOAD_CANNOTCLOSEFILE_ERROR;
+  }
+  DPRINTF("Downloaded.\n");
 
-  // DPRINTF("Deleted files %s and %s\n", tmp_json_filename,
-  // tmp_binary_filename);
+#if BOOSTER_DOWNLOAD_HTTPS == 1
+  altcp_tls_free_config(request.tls_config);
+#endif
+
+  download_firmware_status = DOWNLOAD_STATUS_COMPLETED;
+  download_firmware_error = DOWNLOAD_OK;
+
+  DPRINTF("Firmware binary downloaded\n");
+  return DOWNLOAD_OK;
+}
+
+static void __not_in_flash_func(program_image_from_flash_src)(
+    const uint8_t *src_flash, uint32_t image_size) {
+  const uint32_t SECTOR = FLASH_SECTOR_SIZE;
+  const uint32_t PAGE = FLASH_PAGE_SIZE;
+
+  uint32_t erase_size = (image_size + (SECTOR - 1)) & ~(SECTOR - 1);
+
+  multicore_lockout_victim_init();  // keep core 1 out (safe to call here if
+                                    // linked to RAM)
+  uint32_t ints = save_and_disable_interrupts();
+
+  flash_range_erase(0, erase_size);
+
+  uint8_t pagebuf[FLASH_PAGE_SIZE];
+  uint32_t wrote = 0;
+  while (wrote < image_size) {
+    uint32_t chunk = image_size - wrote;
+    if (chunk > PAGE) chunk = PAGE;
+    memset(pagebuf, 0xFF, PAGE);
+    memcpy(pagebuf, src_flash + wrote, chunk);
+    flash_range_program(wrote, pagebuf, PAGE);
+    wrote += chunk;
+  }
+
+  flash_flush_cache();
+  restore_interrupts(ints);
+}
+
+download_err_t appmngr_confirm_download_firmware() {
+  // Now rename the tmp files to the final filenames
+  char tmp_binary_filename[256] = {0};
+  snprintf(tmp_binary_filename, sizeof(tmp_binary_filename), "%s/tmp.download",
+           settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value);
+
+  // Rename the tmp.download file to the name "upgrade.uf2"
+  char upgrade_filename[256] = {0};
+  snprintf(upgrade_filename, sizeof(upgrade_filename), "%s/upgrade.bin",
+           settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value);
+
+  // Delete it first
+  f_unlink(upgrade_filename);
+
+  FRESULT res = f_rename(tmp_binary_filename, upgrade_filename);
+  if (res != FR_OK) {
+    DPRINTF("Error renaming tmp file: %i\n", res);
+    return DOWNLOAD_CANNOTRENAMEFILE_ERROR;
+  }
+
+  download_firmware_status = DOWNLOAD_STATUS_COMPLETED;
+  download_firmware_error = DOWNLOAD_OK;
+
+  return DOWNLOAD_OK;
+}
+
+void appmngr_firmwareUpgradeStart(void) {
+  // If you are here, we need to write in the start of the flash memory the
+  // upgrader
+  const uint8_t *src_flash =
+      (const uint8_t *)upgrader_firmware;  // source in flash (safe region)
+  const uint32_t image_size =
+      (uint32_t)upgrader_firmware_length * 2;  // in bytes
+
+  program_image_from_flash_src(src_flash, image_size);
+
+  // UPGRADER Manager mode
+  // Force to set the UPGRADER boot feature
+  settings_put_string(gconfig_getContext(), PARAM_BOOT_FEATURE, "UPGRADER");
+  settings_save(gconfig_getContext(), true);
+  sleep_ms(100);  // Wait for the settings to be saved
+
+  DPRINTF("Boot feature set to UPGRADER\n");
+
+  DPRINTF("Resetting device\n");
+  reset_device();
+
+  while (1) {
+    sleep_ms(1000);
+  }
+  DPRINTF("You should never reach this point\n");
+}
+
+download_err_t appmngr_confirm_failed_download_firmware() {
   return DOWNLOAD_STATUS_FAILED;
 }
 
@@ -1822,6 +1966,8 @@ void appmngr_init() {
   sdcard_info = (sdcard_info_t){false, 0, 0, false};
   app_info = (app_info_t){0};
   download_status = DOWNLOAD_STATUS_IDLE;
+  download_firmware_status = DOWNLOAD_STATUS_IDLE;
+  download_type = DOWNLOAD_TYPE_APP;
   request = (HTTPC_REQUEST_T){0};
 }
 
@@ -1829,9 +1975,17 @@ void appmngr_deinit(void) {
   if (file.obj.fs) {
     f_close(&file);
   }
+#if BOOSTER_DOWNLOAD_HTTPS == 1
+  if (request.tls_config) {
+    altcp_tls_free_config(request.tls_config);
+    request.tls_config = NULL;
+  }
+#endif
 
   sdcard_info = (sdcard_info_t){false, 0, 0, false};
   app_info = (app_info_t){0};
   download_status = DOWNLOAD_STATUS_IDLE;
+  download_firmware_status = DOWNLOAD_STATUS_IDLE;
+  download_type = DOWNLOAD_TYPE_APP;
   request = (HTTPC_REQUEST_T){0};
 }
