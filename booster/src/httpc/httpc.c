@@ -135,7 +135,7 @@ int http_client_request_sync(async_context_t *context, HTTPC_REQUEST_T *req) {
   }
   while (!req->complete) {
     async_context_poll(context);
-    async_context_wait_for_work_ms(context, 1000);
+    async_context_wait_for_work_ms(context, 10);
   }
   return req->result;
 }
