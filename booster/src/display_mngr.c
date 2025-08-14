@@ -62,6 +62,13 @@ void display_mngr_change_status(uint8_t status, const char *details) {
     case 2:
       snprintf(status_str, sizeof(status_str),
                details != NULL ? details : "   Connection Error! ");
+    case 5:
+      snprintf(status_str, sizeof(status_str),
+               details != NULL ? details : "Downloading firmware ");
+      break;
+    case 6:
+      snprintf(status_str, sizeof(status_str),
+               details != NULL ? details : "Firmware ready for upgrade");
       break;
     default:
       snprintf(status_str, sizeof(status_str), "   Launching App...  ");
