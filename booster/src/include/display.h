@@ -31,6 +31,12 @@
 #define DISPLAY_QR_BORDER 2
 #define DISPLAY_QR_SCALE 4
 #define DISPLAY_TILES_WIDTH 40
+// If 1, the display will not use the framebuffer and will write directly to the
+// display memory. This is useful to reduce the memory usage.
+// When not using the framebuffer, the endianess swap must be done in the remote
+// computer.
+#define DISPLAY_BYPASS_FRAMEBUFFER 1
+
 // #define DISPLAY_COMMAND_ADDRESS (ROM_IN_RAM_ADDRESS + 0x10000 + 8000) //
 // increment 64K bytes to get the second 64K block + 8000 bytes to get the 8K
 // block #define DISPLAY_HIGHRES_TRANSTABLE_ADDRESS (ROM_IN_RAM_ADDRESS +

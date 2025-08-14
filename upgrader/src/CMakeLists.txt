@@ -39,6 +39,13 @@ else()
     message(FATAL_ERROR "Unknown BOARD_TYPE: ${BOARD_TYPE}")
 endif()
 
+# Add the env variable FATFS_SDK_PATH if it does not exist
+if(NOT DEFINED ENV{FATFS_SDK_PATH})
+    set(ENV{FATFS_SDK_PATH} ../../fatfs-sdk)
+endif()
+# Show the value
+message(STATUS "FATFS_SDK_PATH: $ENV{FATFS_SDK_PATH}")
+
 # Add the env variable PICO_SDK_PATH if it does not exist
 if(NOT DEFINED ENV{PICO_SDK_PATH})
     set(ENV{PICO_SDK_PATH} ../../pico-sdk)
@@ -46,25 +53,34 @@ endif()
 # Show the value
 message(STATUS "PICO_SDK_PATH: $ENV{PICO_SDK_PATH}")
 
-
 # Include build functions from Pico SDK
 include($ENV{PICO_SDK_PATH}/pico_sdk_init.cmake)
 
 # Set name of project (as PROJECT_NAME) and C/C   standards
-project(placeholder C CXX)
+project(upgrader C CXX)
 set(CMAKE_C_STANDARD 11)
 # Creates a pico-sdk subdirectory in our project for the libraries
 pico_sdk_init()
 
 add_subdirectory(settings)
 
+# Tell CMake where to find other source code
+add_subdirectory($ENV{FATFS_SDK_PATH}/src build)
+  
 # Tell CMake where to find the executable source file
 add_executable(${PROJECT_NAME} 
         main.c
 )
 
-target_sources(${PROJECT_NAME} PRIVATE gconfig.c)
-target_sources(${PROJECT_NAME} PRIVATE aconfig.c)
+target_sources(${PROJECT_NAME} PRIVATE 
+                    gconfig.c
+                    hw_config.c)
+
+# Ensure local and FatFS headers are visible to all target sources
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/include
+    $ENV{FATFS_SDK_PATH}/src/include
+)
 
 # Create map/bin/hex/uf2 files
 pico_add_extra_outputs(${PROJECT_NAME})
@@ -72,23 +88,13 @@ pico_add_extra_outputs(${PROJECT_NAME})
 # Link to pico_stdlib (gpio, time, etc. functions)
 # Base libraries
 set(LINK_LIBRARIES
-        pico_stdlib              # for core functionality
+    no-OS-FatFS-SD-SDIO-SPI-RPi-Pico                # FATFS library   
+    settings                 # Custom settings library
 )
-
-target_sources(${PROJECT_NAME} PRIVATE  ${CMAKE_SOURCE_DIR}/settings/settings.c)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LINK_LIBRARIES}
     hardware_flash # Specific hardware flash library
-    settings                # for settings library
 )
-
-# Link custom memmap with reserved memory for ROMs
-set_target_properties(${PROJECT_NAME} PROPERTIES
-        PICO_TARGET_LINKER_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/memmap_placeholder.ld
-)
-
-# Use reduced space for ROMs
-pico_set_binary_type(${PROJECT_NAME} placeholder)
 
 # Fetch the values from the environment variables
 set(RELEASE_TYPE $ENV{RELEASE_TYPE})
@@ -134,6 +140,7 @@ pico_enable_stdio_usb(${PROJECT_NAME} 0)
 # Workaround to disable USB output in release builds
 if(${_DEBUG} STREQUAL "0")
     pico_enable_stdio_uart(${PROJECT_NAME} 0)
+    pico_enable_stdio_usb(${PROJECT_NAME} 0)
     target_link_options(${PROJECT_NAME} PRIVATE
     "-Wl,--gc-sections"
     "-Wl,--strip-all"
@@ -141,6 +148,7 @@ if(${_DEBUG} STREQUAL "0")
 
 else()
     pico_enable_stdio_uart(${PROJECT_NAME} 1)
+    pico_enable_stdio_usb(${PROJECT_NAME} 0)
 endif()
 
 # Pass these values to the C compiler
@@ -148,28 +156,6 @@ add_definitions(-DRELEASE_TYPE="${RELEASE_TYPE}")
 add_definitions(-DRELEASE_VERSION="${RELEASE_VERSION}")
 add_definitions(-DRELEASE_DATE="${RELEASE_DATE}")
 add_definitions(-DLATEST_RELEASE_URL="${LATEST_RELEASE_URL}")
-
-# Pass the _DEBUG flag to the C compiler
-add_definitions(-D_DEBUG=${_DEBUG})
-# PICO_DEOPTIMIZE_DEBUG is used to disable optimizations in debug mode
-if (NOT DEFINED ENV{PICO_DEOPTIMIZE_DEBUG})
-    set(ENV{PICO_DEOPTIMIZE_DEBUG} "1")
-endif()
-
-# PICO_USE_FASTEST_SUPPORTED_CLOCK to the maximum frequency
-if (NOT DEFINED ENV{PICO_USE_FASTEST_SUPPORTED_CLOCK})
-    add_definitions(-DPICO_USE_FASTEST_SUPPORTED_CLOCK=1)
-endif()
-
-
-# Handle custom build type by checking if it's set
-if(CMAKE_BUILD_TYPE STREQUAL "CustomBuild")
-    # Define custom build type flags
-    set(CMAKE_C_FLAGS_CUSTOMBUILD "-ffunction-sections -fdata-sections -O0 -mcpu=cortex-m0 -mthumb")
-    set(CMAKE_CXX_FLAGS_CUSTOMBUILD "-ffunction-sections -fdata-sections -O0 -mcpu=cortex-m0 -mthumb")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS_CUSTOMBUILD}")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_CUSTOMBUILD}")
-endif()
 
 # Define your binary type
 set(PICO_BINARY_TYPE copy_to_ram)  # Change to e.g. no_flash if needed
@@ -180,11 +166,11 @@ pico_set_binary_type(${PROJECT_NAME} ${PICO_BINARY_TYPE})
 # Conditionally set linker script
 if(NOT "${PICO_BINARY_TYPE}" STREQUAL "copy_to_ram")
     set_target_properties(${PROJECT_NAME} PROPERTIES
-        PICO_TARGET_LINKER_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/memmap_placeholder.ld
+        PICO_TARGET_LINKER_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/memmap_upgrader.ld
     )
 else()
     set_target_properties(${PROJECT_NAME} PROPERTIES
-        PICO_TARGET_LINKER_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/memmap_placeholder_copy_to_ram.ld
+        PICO_TARGET_LINKER_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/memmap_upgrader_copy_to_ram.ld
     )
 endif()
 

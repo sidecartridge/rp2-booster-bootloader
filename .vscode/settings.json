@@ -20,6 +20,8 @@
     // We need to change both folders to change the build directory and code source directory
     // "cmake.sourceDirectory": "${workspaceFolder}/placeholder/src",
     // "cmake.buildDirectory": "${workspaceFolder}/placeholder/build",
+    // "cmake.sourceDirectory": "${workspaceFolder}/upgrader/src",
+    // "cmake.buildDirectory": "${workspaceFolder}/upgrader/build",
     "cmake.sourceDirectory": "${workspaceFolder}/booster/src",
     "cmake.buildDirectory": "${workspaceFolder}/booster/build",
     // Disabling error squiggles to reduce clutter, but consider "enabled" for more feedback

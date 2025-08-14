@@ -131,7 +131,6 @@ target_sources(${PROJECT_NAME} PRIVATE
         display_fabric.c
         display_mngr.c
         display_term.c
-        display_usb.c
         fabric.c
         fabric_httpd.c
         hw_config.c
@@ -145,9 +144,7 @@ target_sources(${PROJECT_NAME} PRIVATE
         sdcard.c
         select.c
         term.c
-        usb_descriptors.c
-        usb_mass.c
-        tusb_config.h
+        version.c
         cjson/cJSON.c
         httpc/httpc.c
         md5/md5.c
@@ -165,13 +162,13 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     no-OS-FatFS-SD-SDIO-SPI-RPi-Pico                # FATFS library   
     pico_lwip                # lwIP library
     pico_lwip_http           # lwIP httpd library
-    pico_mbedtls             # mbedTLS library
+    pico_lwip_mdns           # lwIP mDNS library
+#    pico_mbedtls             # mbedTLS library
     pico_multicore           # Multicore support
     pico_stdlib              # Core functionality
     httpc                    # HTTP client
     qrcodegen                # QR code generation library
     settings                 # Custom settings library
-    tinyusb_device           # for USB
     u8g2                     # for display
 )
 

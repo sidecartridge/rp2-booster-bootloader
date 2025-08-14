@@ -4,6 +4,7 @@
 echo "Copy version.txt to each project"
 cp version.txt booster/
 cp version.txt placeholder/
+cp version.txt upgrader/
 
 # Display the version information
 export VERSION=$(cat version.txt)
@@ -28,6 +29,18 @@ echo "Delete previous build directory"
 rm -rf build
 mkdir build
 
+# Build the upgrader
+echo "Building upgrader project"
+cd upgrader
+./build.sh pico MinSizeRel
+cd ..
+
+# Build the term
+echo "Building term project"
+cd term/atarist
+./build.sh $(PWD) release
+cd ../..
+
 # Build the booster project
 echo "Building booster project"
 cd booster
@@ -42,11 +55,11 @@ cd ..
 # Build the placeholder
 echo "Building placeholder project"
 cd placeholder
-./build.sh $BOARD_TYPE $BUILD_TYPE
+./build.sh pico $BUILD_TYPE
 if [ "$BUILD_TYPE" = "release" ]; then
-    cp  ./dist/placeholder-$BOARD_TYPE.uf2 ../build/placeholder.uf2
+    cp  ./dist/placeholder-pico.uf2 ../build/placeholder.uf2
 else
-    cp  ./dist/placeholder-$BOARD_TYPE-$BUILD_TYPE.uf2 ../build/placeholder.uf2
+    cp  ./dist/placeholder-pico-$BUILD_TYPE.uf2 ../build/placeholder.uf2
 fi
 cd ..
 
@@ -74,7 +87,9 @@ python merge_uf2.py ./build/placeholder.uf2 ./build/booster.uf2 ./dist/rp-booste
 
 # Rename the file to include the version number and the build type
 if [ "$BUILD_TYPE" = "release" ]; then
-    mv ./dist/rp-booster-all.uf2 ./dist/rp-booster-$VERSION-full.uf2
+    cp ./dist/rp-booster-all.uf2 ./dist/rp-booster-$VERSION-full.uf2
+    mv ./dist/rp-booster-all.uf2 ./dist/upgrade.bin
+    cp version.txt ./dist/SIDECARTVERSION
 else
     mv ./dist/rp-booster-all.uf2 ./dist/rp-booster-$VERSION-$BUILD_TYPE-full.uf2
 fi

@@ -27,6 +27,8 @@ static void saveWifiParams() {
   settings_save(gconfig_getContext(), true);
   DPRINTF("STA parameters save. Reboot!\n");
 
+  multicore_lockout_victim_init();  // keep the core 1 locked out
+
   // Send the reboot command
   SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_RESET);
   reset_device();
@@ -80,6 +82,25 @@ void fabric_served_callback() {
  * @return int Returns 0 on success, or an error code on failure.
  */
 int fabric_init() {
+  // LEt's clean the flash memory starting in the
+  unsigned int config_flash_length = (unsigned int)&_global_lookup_flash_start -
+                                     (unsigned int)&_config_flash_start;
+  unsigned int global_lookup_flash_length = FLASH_SECTOR_SIZE;
+  unsigned int global_config_flash_length = FLASH_SECTOR_SIZE;
+  unsigned int total_config_flash_length = config_flash_length +
+                                           global_lookup_flash_length +
+                                           global_config_flash_length;
+  DPRINTF(
+      "Erasing configuration and lookup tables starting at 0x%08X for %d "
+      "bytes\n",
+      (unsigned int)&_config_flash_start, total_config_flash_length);
+  // Erase the configuration and lookup tables previously used
+  uint32_t ints = save_and_disable_interrupts();
+  flash_range_erase((unsigned int)&_config_flash_start - XIP_BASE,
+                    total_config_flash_length);
+  restore_interrupts(ints);
+  DPRINTF("Configuration and lookup tables erased\n");
+
   // First, check if there is a Wifi configuration file in the microSD card.
   // Initialize the SD card
   FATFS fs;
@@ -193,7 +214,7 @@ void fabric_loop() {
   char url_gw[128] = {0};
   snprintf(url_gw, sizeof(url_gw), "http://%s", WIFI_AP_GATEWAY);
   char url_host[128] = {0};
-  snprintf(url_host, sizeof(url_host), "http://%s", WIFI_AP_HOSTNAME);
+  snprintf(url_host, sizeof(url_host), "http://%s.local", WIFI_AP_HOSTNAME);
   set_dhcp_server_cb(fabric_httpd_get_ip);
   const char *authType = network_getAuthTypeStringShort(WIFI_AP_AUTH);
   display_fabric_start(WIFI_AP_SSID, WIFI_AP_PASS, authType, url_gw, url_host);
@@ -206,9 +227,9 @@ void fabric_loop() {
   while (!fabric_config.is_set) {
 #if PICO_CYW43_ARCH_POLL
     network_safe_poll();
-    cyw43_arch_wait_for_work_until(wifi_scan_time);
+    cyw43_arch_wait_for_work_until(10);
 #else
-    sleep_ms(wait_poll_interval_ms);
+    sleep_ms(10);
 #endif
     // printf("Time elapsed: %lld microseconds\n", wifi_scan_time);
     // blink_morse('A');
@@ -247,8 +268,17 @@ void fabric_loop() {
   // Deinit the DNS server
   dns_server_deinit();
 
+  // Leave the AP interface
+  cyw43_wifi_leave(&cyw43_state, CYW43_ITF_AP);
+  cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_AP, false, 0);
+
   // Deinit the network
   network_deInit();
+
+  // Force hard power-off
+#ifdef CYW43_WL_GPIO_WL_REG_ON
+  cyw43_arch_gpio_put(CYW43_WL_GPIO_WL_REG_ON, 0);
+#endif
 
   // Wait for the page before rebooting
   sleep_ms(wait_poll_interval_ms);

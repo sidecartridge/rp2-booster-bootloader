@@ -26,21 +26,57 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 
   <script>
-    // Spinner logic
+    // Spinner logic (unchanged)
     const spinnerFrames = ['|', '/', '-', '\\', '|', '/', '-', '\\'];
     let currentFrame = 0;
-
     function updateSpinner() {
       const spinner = document.getElementById('spinner-char');
-      spinner.textContent = spinnerFrames[currentFrame];
-      currentFrame = (currentFrame + 1) % spinnerFrames.length;
+      if (spinner) {
+        spinner.textContent = spinnerFrames[currentFrame];
+        currentFrame = (currentFrame + 1) % spinnerFrames.length;
+      }
     }
-
-    // Start the spinner
     setInterval(updateSpinner, 50);
 
-  </script>
+    // Polling logic
+    let pollInterval = 30000; // 30 seconds
+    let pollTimer = null;
+    let firstPollDone = false;
 
+    function showAppLaunchedMsg() {
+      const spinner = document.getElementById('spinner');
+      if (spinner) {
+        spinner.innerHTML = '<strong>App launched</strong><br>The app should now run in your computer.';
+      }
+    }
+
+    function pollLaunching() {
+      fetch('/launching.html', { cache: 'no-store' })
+        .then(response => {
+          if (response.ok) {
+            // If the resource exists, redirect
+            window.location.href = '/mngr_home.shtml';
+          } else {
+            // Not 200 OK
+            showAppLaunchedMsg();
+          }
+        })
+        .catch(error => {
+          // Network error or timeout
+          showAppLaunchedMsg();
+        })
+        .finally(() => {
+          // Keep polling every 30s only if not redirected
+          if (!firstPollDone) {
+            firstPollDone = true;
+          }
+          pollTimer = setTimeout(pollLaunching, pollInterval);
+        });
+    }
+
+    // Wait 30s, then start polling
+    setTimeout(pollLaunching, pollInterval);
+  </script>
 </head>
 
 <body>

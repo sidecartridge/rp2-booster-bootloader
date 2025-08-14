@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title><!--#TITLEHDR--></title>
+
+  <link rel="icon" href="data:;base64,=">
+
+  <meta charset="UTF-8">
+  <!-- Important for mobile: ensures responsive scaling -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:;base64,=">
+  <title><!--#TITLEHDR--></title>
+
+  <!-- Pure.css (CDN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
+    integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous" />
+  <!-- Grid responsiveness (sm, md, lg classes) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />
+  <link rel="stylesheet" href="styles.css?v=1.0" />
+
+  <!-- Font Awesome for icons (CDN) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+
+  <script>
+    // Spinner logic (shared by views that show a spinner)
+    const spinnerFrames = ['|', '/', '-', '\\', '|', '/', '-', '\\'];
+    let currentFrame = 0;
+
+    function updateSpinner() {
+      const spinners = document.querySelectorAll('.spinner-char');
+      if (spinners && spinners.length) {
+        spinners.forEach(el => {
+          el.textContent = spinnerFrames[currentFrame];
+        });
+        currentFrame = (currentFrame + 1) % spinnerFrames.length;
+      }
+    }
+
+    // Run spinner animation continuously; it only shows when spinner element exists
+    setInterval(updateSpinner, 50);
+
+    // Upgrade flow controller
+    function upgradeFlow() {
+      return {
+        phase: 'intro', // intro | downloading | ready | confirming | success | error
+        errorMessage: '',
+        // countdowns
+        downloadSecondsRemaining: 120,
+        confirmSecondsRemaining: 20,
+        downloadIntervalId: null,
+        confirmIntervalId: null,
+        // Step 1: start downloading firmware
+        async continueUpgrade() {
+          try {
+            const res = await fetch('/firmware_upgrade_start.cgi', { method: 'GET' });
+            let startJson = null;
+            try { startJson = await res.json(); } catch (_) { /* ignore JSON parse errors */ }
+            if (!res.ok || !startJson || typeof startJson.status !== 'number' || startJson.status !== 200) {
+              const msg = (startJson && startJson.message ? String(startJson.message).trim() : `HTTP ${res.status}`);
+              throw new Error(msg);
+            }
+            // Wait approximately two minutes while the device downloads the firmware
+            this.phase = 'downloading';
+            // initialize and start download countdown
+            this.downloadSecondsRemaining = 120;
+            if (this.downloadIntervalId) { clearInterval(this.downloadIntervalId); }
+            this.downloadIntervalId = setInterval(() => {
+              if (this.downloadSecondsRemaining > 0) this.downloadSecondsRemaining--;
+            }, 1000);
+            setTimeout(async () => {
+              try {
+                // NOTE: If your endpoint is named differently, adjust here.
+                const chk = await fetch('/firmware_upgrade_downloaded.cgi', { method: 'GET' });
+                let chkJson = null;
+                try { chkJson = await chk.json(); } catch (_) { /* ignore JSON parse errors */ }
+                if (!chk.ok || !chkJson || typeof chkJson.status !== 'number' || chkJson.status !== 200) {
+                  const msg = (chkJson && chkJson.message ? String(chkJson.message).trim() : `HTTP ${chk.status}`);
+                  throw new Error(msg);
+                }
+                this.phase = 'ready';
+                if (this.downloadIntervalId) { clearInterval(this.downloadIntervalId); this.downloadIntervalId = null; }
+              } catch (e) {
+                this.errorMessage = e && e.message ? e.message : 'Download verification failed. Please try again later.';
+                this.phase = 'error';
+                if (this.downloadIntervalId) { clearInterval(this.downloadIntervalId); this.downloadIntervalId = null; }
+              }
+            }, 120000);
+          } catch (e) {
+            this.errorMessage = e && e.message ? e.message : 'Failed to start the firmware download. Please try again later.';
+            this.phase = 'error';
+          }
+        },
+        // Step 2: confirm upgrade (fire-and-forget)
+        confirmUpgrade() {
+          // Trigger confirmation without awaiting or handling the response
+          try {
+            fetch('/firmware_upgrade_confirm.cgi', { method: 'GET', keepalive: true })
+              .catch(() => { /* ignore any network/HTTP errors */ });
+          } catch (_) {
+            // Ignore any synchronous errors from fetch construction
+          }
+
+          // Immediately show spinner for 20s, then redirect to root
+          this.phase = 'confirming';
+          this.confirmSecondsRemaining = 20;
+          if (this.confirmIntervalId) { clearInterval(this.confirmIntervalId); }
+          this.confirmIntervalId = setInterval(() => {
+            if (this.confirmSecondsRemaining > 0) this.confirmSecondsRemaining--;
+          }, 1000);
+          setTimeout(() => {
+            if (this.confirmIntervalId) { clearInterval(this.confirmIntervalId); this.confirmIntervalId = null; }
+            window.location.href = '/';
+          }, 20000);
+        }
+      };
+    }
+  </script>
+
+</head>
+
+<body x-data="upgradeFlow()">
+  <!-- Blue Banner Header -->
+  <header class="header">
+    <h1><!--#TITLEHDR--></h1>
+  </header>
+
+  <main class="main-content-full-width">
+    <h2>Upgrade the firmware</h2>
+
+    <!-- Error Banner -->
+    <div class="banner banner-error" x-show="phase === 'error'">
+      <i class="fas fa-exclamation-circle banner-icon"></i>
+      <span x-text="errorMessage"></span>
+      <a href="/mngr_home.shtml" class="pure-button" style="margin-left: 0.5rem;">Back to Home</a>
+    </div>
+
+    <!-- Step 1: Instructions and start -->
+    <div x-show="phase === 'intro'">
+      <p>
+        Step 1 of 2: The device will download the new firmware from the server. This may take up to two minutes
+        depending on your network speed.
+      </p>
+      <p>
+        Please do not refresh or navigate away from this page during the process.
+      </p>
+      <button class="pure-button pure-button-primary" @click="continueUpgrade()">Continue upgrading</button>
+    </div>
+
+    <!-- Step 1: Downloading spinner (2 minutes) -->
+    <div x-show="phase === 'downloading'">
+      <p>Downloading firmware... This may take about two minutes. Please wait.</p>
+      <div id="spinner" class="spinner">
+        Downloading... <span class="spinner-char">|</span>
+        <span class="countdown">(<span x-text="downloadSecondsRemaining"></span> s)</span>
+      </div>
+    </div>
+
+    <!-- Step 2: Ready to confirm upgrade -->
+    <div x-show="phase === 'ready'">
+      <p>
+        Step 2 of 2: The firmware has been downloaded to the device. Press the button below to confirm the upgrade.
+      </p>
+      <button class="pure-button pure-button-primary" @click="confirmUpgrade()">Confirm firmware upgrade</button>
+    </div>
+
+    <!-- Confirming / applying upgrade: 20s spinner then redirect to root -->
+    <div x-show="phase === 'confirming'">
+      <p>Applying firmware upgrade... The device may restart. Please wait.</p>
+      <div id="spinner" class="spinner">
+        Upgrading... <span class="spinner-char">|</span>
+        <span class="countdown">(<span x-text="confirmSecondsRemaining"></span> s)</span>
+      </div>
+    </div>
+  </main>
+</body>
+
+</html>

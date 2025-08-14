@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <!-- Important for mobile: ensures responsive scaling -->
@@ -15,6 +16,7 @@
             background-color: #f4f4f9;
             color: #333;
         }
+
         .container {
             width: 90%;
             max-width: 800px;
@@ -24,6 +26,7 @@
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             border-radius: 8px;
         }
+
         /* Header Styles */
         .header {
             background-color: #0078e7;
@@ -32,23 +35,28 @@
             text-align: center;
             border-radius: 8px 8px 0 0;
         }
+
         .header h1 {
             margin: 0;
             font-size: 24px;
         }
+
         /* Section Styles */
         section {
             margin-bottom: 20px;
         }
+
         section h2 {
             font-size: 20px;
             margin-bottom: 10px;
             color: #0078e7;
         }
+
         section p {
             line-height: 1.6;
             margin-bottom: 10px;
         }
+
         /* Spinner Styles */
         .spinner {
             font-size: 16px;
@@ -57,6 +65,7 @@
             margin-top: 10px;
             display: block;
         }
+
         /* Footer Styles */
         .footer {
             text-align: center;
@@ -70,15 +79,17 @@
             .header h1 {
                 font-size: 20px;
             }
+
             section h2 {
                 font-size: 18px;
             }
+
             button {
                 font-size: 14px;
                 padding: 8px 16px;
             }
         }
-</style>
+    </style>
     <script>
         // Spinner logic
         const spinnerFrames = ['|', '/', '-', '\\', '|', '/', '-', '\\'];
@@ -95,10 +106,11 @@
 
         // Redirect after 10 seconds
         setTimeout(() => {
-            window.location.href = 'http://sidecart';
+            window.location.href = 'http://sidecart.local';
         }, 20000);
     </script>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -107,11 +119,15 @@
         <section>
             <h2>Restarting the device</h2>
             <div>
-                <br/>
+                <br />
                 <p>
-                    The device is now restarting. The green LED will blink while attempting to connect to the selected WiFi network. Once connected successfully, the web application will automatically redirect you to the internet-connected app and the device to continue with the configuration. If the green LED continues blinking, press and hold the SELECT button for a few seconds to restart the configuration process again.
+                    The device is now restarting. The green LED will blink while attempting to connect to the selected
+                    WiFi network. Once connected successfully, the web application will automatically redirect you to
+                    the internet-connected app and the device to continue with the configuration. If the green LED
+                    continues blinking, press and hold the SELECT button for a few seconds to restart the configuration
+                    process again.
                 </p>
-                <br/>
+                <br />
                 <div id="spinner" class="spinner">
                     Restarting <span id="spinner-char">|</span>
                 </div>
@@ -122,4 +138,5 @@
         </div>
     </div>
 </body>
+
 </html>

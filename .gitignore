@@ -56,3 +56,5 @@ build/
 dist/
 secrets.sh
 term/atarist/term_firmware.h
+.venv/
+*.uf2

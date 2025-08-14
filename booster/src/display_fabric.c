@@ -70,16 +70,17 @@ void draw_connection_step2_scr(const uint8_t qrcode_url[], const char *url1,
   display_draw_qr(qrcode_url, DISPLAY_WIDTH / 2, DISPLAY_HEIGHT, 160, 0,
                   DISPLAY_QR_BORDER, DISPLAY_QR_SCALE);
 
-  // URL
+  // URL 1
   u8g2_DrawStr(display_get_u8g2_ref(),
                160 + LEFT_PADDING_FOR_CENTER(url1, DISPLAY_TILES_WIDTH / 2) * 8,
                32, url1);
-  u8g2_DrawStr(display_get_u8g2_ref(),
-               160 + LEFT_PADDING_FOR_CENTER(url2, DISPLAY_TILES_WIDTH / 2) * 8,
-               40, url2);
+
+  u8g2_SetFont(display_get_u8g2_ref(), u8g2_font_squeezed_b7_tr);
+  // URL 2
+  // u8g2_DrawStr(display_get_u8g2_ref(),
+  //              160 + LEFT_PADDING_FOR_CENTER(url2, 34) * 5, 40, url2);
 
   // Steps info
-  u8g2_SetFont(display_get_u8g2_ref(), u8g2_font_squeezed_b7_tr);
   u8g2_DrawStr(
       display_get_u8g2_ref(),
       160 + LEFT_PADDING_FOR_CENTER(DISPLAY_CONNECTION_STEP2_MSG, 34) * 5, 8,

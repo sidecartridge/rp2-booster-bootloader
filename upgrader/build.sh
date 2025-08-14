@@ -7,17 +7,14 @@ cd ..
 git submodule init
 git submodule update --init --recursive
 
+# Set the environment variables of the SDKs
+export PICO_SDK_PATH=$PWD/pico-sdk
+
 # Pin the building versions
 echo "Pinning the SDK versions..."
 cd pico-sdk
 #git checkout tags/2.1.0
 git checkout tags/2.1.1
-cd ..
-
-echo "Pinning the Extras SDK versions..."
-cd pico-extras
-#git checkout tags/sdk-2.1.0
-git checkout tags/sdk-2.1.1
 cd ..
 
 echo "Pinning the FatFs SDK versions..."
@@ -27,18 +24,12 @@ cd fatfs-sdk
 git checkout tags/v3.6.2
 cd ..
 
-# This is a dirty hack to guarantee that I can use the fatfs-sdk submodule
-#echo "Patching the fatfs-sdk... to use chmod"
-#sed -i.bak 's/#define FF_USE_CHMOD[[:space:]]*0/#define FF_USE_CHMOD 1/' fatfs-sdk/src/include/ffconf.h && mv fatfs-sdk/src/include/ffconf.h.bak .
-#sed -i.bak 's/#define FF_FS_TINY[[:space:]]*0/#define FF_FS_TINY 1/' fatfs-sdk/src/include/ffconf.h && mv fatfs-sdk/src/include/ffconf.h.bak2 .
-
 # Set the environment variables of the SDKs
 export PICO_SDK_PATH=$PWD/pico-sdk
 export FATFS_SDK_PATH=$PWD/fatfs-sdk
-export PICO_EXTRAS_PATH=$PWD/pico-extras
 
-# Return to booster path
-cd booster
+# Return to upgrader path
+cd upgrader
 
 # Check if the third parameter is provided
 export RELEASE_TYPE=${3:-""}
@@ -60,8 +51,9 @@ export RELEASE_DATE=$(date +"%Y-%m-%d %H:%M:%S")
 echo "Release date: $RELEASE_DATE"
 
 # Set the board type to be used for building
-# If nothing passed as first argument, use pico_w
-export BOARD_TYPE=${1:-pico_w}
+# If nothing passed as first argument, use pico
+# Use pico instead if pico_w to reduce the footprint
+export BOARD_TYPE=${1:-pico}
 export PICO_BOARD=$BOARD_TYPE
 echo "Board type: $BOARD_TYPE"
 
@@ -70,12 +62,11 @@ echo "Board type: $BOARD_TYPE"
 export BUILD_TYPE=${2:-release}
 echo "Build type: $BUILD_TYPE"
 
-# If the build type is release, set DEBUG_MODE environment variable to 0
-# Otherwise set it to 1
-if [ "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" = "release" ]; then
-    export DEBUG_MODE=0
-else
+# If and only if the build type is debug, enable DEBUG_MODE
+if [ "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" = "debug" ]; then
     export DEBUG_MODE=1
+else
+    export DEBUG_MODE=0
 fi
 
 # Set the build directory. Delete previous contents if any
@@ -89,22 +80,10 @@ mkdir build
 # Build the project
 echo "Building the project"
 #export PICO_DEOPTIMIZED_DEBUG=1
-
-# Set more environment variables for the build
-export DISPLAY_ATARIST=1
-export PICO_FLASH_ASSUME_CORE0_SAFE=1
-export BOOSTER_DOWNLOAD_HTTPS=0
-
-echo "DEBUG_MODE: $DEBUG_MODE"
-echo "DISPLAY_ATARIST: $DISPLAY_ATARIST"
-echo "PICO_FLASH_ASSUME_CORE0_SAFE: $PICO_FLASH_ASSUME_CORE0_SAFE"
-echo "BOOSTER_DOWNLOAD_HTTPS: $BOOSTER_DOWNLOAD_HTTPS"
-echo "PICO_DEOPTIMIZED_DEBUG: $PICO_DEOPTIMIZED_DEBUG"
+#echo "PICO_DEOPTIMIZED_DEBUG: $PICO_DEOPTIMIZED_DEBUG"
 
 cd build
-cmake ../src -DCMAKE_BUILD_TYPE=$BUILD_TYPE 
-#cmake ../src -DCMAKE_BUILD_TYPE=CustomBuild
-#cmake ../src -DCMAKE_BUILD_TYPE=Debug
+cmake ../src -DCMAKE_BUILD_TYPE=$BUILD_TYPE
 make -j4 
 
 # Copy the built firmware to the /dist folder
@@ -112,7 +91,13 @@ cd ..
 mkdir -p dist
 echo "Copying the built firmware to the dist folder"
 if [ "$BUILD_TYPE" = "release" ]; then
-    cp build/booster.uf2 dist/booster-$BOARD_TYPE.uf2
+    cp build/upgrader.uf2 dist/upgrader-$BOARD_TYPE.uf2
 else
-    cp build/booster.uf2 dist/booster-$BOARD_TYPE-$BUILD_TYPE.uf2
+    cp build/upgrader.uf2 dist/upgrader-$BOARD_TYPE-$BUILD_TYPE.uf2
 fi
+
+echo "Creating the firmware.h file."
+python firmware.py --input=build/upgrader.bin --output=upgrader_firmware.h --array_name=upgrader_firmware --endian_format=big
+
+cp upgrader_firmware.h ../booster/src/include/upgrader_firmware.h
+echo "Copied upgrader_firmware.h to booster/src/include/upgrader_firmware.h"

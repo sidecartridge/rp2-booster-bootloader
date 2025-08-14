@@ -1,6 +1,24 @@
 # Changelog
 
-## v2.0.4alpha (2025-06-13) - Alpha release
+## v2.0.6beta (2025-08-14) - Beta release
+
+This is the first beta release. It includes all the new features and improvements for the version 2.0.x, and it will not include any more new features. The code is still in development and may contain bugs, but it is more stable than previous alpha releases and ready to use for all users.
+
+### Changes
+- **Show information in the web app when launched app**: The web app will now display relevant information and tips when launched, helping users to get started quickly and easily.
+- **Removed USB Mass Storage support**: The USB Mass Storage feature has been removed. Now, to use the Mass storage mode the user has to launch the File Manager or Multi-drive microfirmwares.
+- **Disable ICMP ping responses**: ICMP ping responses have been disabled for improved reliability.
+- **Better network deinitialization**: The network deinitialization process has been improved to avoid the network to stuck when changing from the "Factory" mode to the "Booster" mode.
+
+### New features
+- **Firmware update notifications**: The web app will now notify users when a new firmware update is available.
+- **Firmware upgrade process**: The firmware upgrade process has been streamlined for easier updates. Now the users can initiate the upgrade process directly from the web app, without needing to manually download and install firmware files.
+- **mDNS support**: The web app now supports mDNS (Multicast DNS), allowing for easier discovery and connection to devices on the local network. Now the site "sidecart.local" is accessible via mDNS. Previously it was only through DHCP plus DNS, which small routers from telecom providers often struggle with.
+
+### Fixes
+- Multiple small bug fixes and improvements.
+
+## v2.0.5alpha (2025-07-02) - Alpha release
 
 This is a rolling alpha release. It may include new features, bugs, and issues. Bug and issue tracking is not yet available as this is not a public release. This is a development version.
 
