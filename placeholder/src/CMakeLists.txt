@@ -24,7 +24,7 @@ endif ()
 set(BOARD_TYPE $ENV{BOARD_TYPE})
 if(NOT DEFINED BOARD_TYPE)
     message(STATUS "BOARD_TYPE not set, using default pico_w")
-    set(BOARD_TYPE "pico_w")
+    set(BOARD_TYPE "pico")
 endif()
 set(PICO_BOARD ${BOARD_TYPE})
 
@@ -169,6 +169,23 @@ if(CMAKE_BUILD_TYPE STREQUAL "CustomBuild")
     set(CMAKE_CXX_FLAGS_CUSTOMBUILD "-ffunction-sections -fdata-sections -O0 -mcpu=cortex-m0 -mthumb")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS_CUSTOMBUILD}")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_CUSTOMBUILD}")
+endif()
+
+# Define your binary type
+set(PICO_BINARY_TYPE copy_to_ram)  # Change to e.g. no_flash if needed
+
+# Set binary type using the variable
+pico_set_binary_type(${PROJECT_NAME} ${PICO_BINARY_TYPE})
+
+# Conditionally set linker script
+if(NOT "${PICO_BINARY_TYPE}" STREQUAL "copy_to_ram")
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        PICO_TARGET_LINKER_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/memmap_placeholder.ld
+    )
+else()
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        PICO_TARGET_LINKER_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/memmap_placeholder_copy_to_ram.ld
+    )
 endif()
 
 # Print the variables on screen
