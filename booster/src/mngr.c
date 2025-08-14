@@ -8,6 +8,7 @@
 
 #include "mngr.h"
 
+static firmware_upgrade_state_t firmware_upgrade_state = FIRMWARE_UPGRADE_IDLE;
 static bool network_scan_enabled = false;
 static bool device_reset = false;
 static bool factory_reset = false;
@@ -49,56 +50,23 @@ int mngr_init() {
   }
   appmngr_get_sdcard_info()->ready = (sdcard_err == SDCARD_INIT_OK);
 
-  //  Check if the USB is connected. If so, check if the SD card is inserted
-  //  and initialize the USB Mass storage device
-  if (appmngr_get_sdcard_info()->ready) {
-    if (USBDRIVE_MASS_STORE && cyw43_arch_gpio_get(CYW43_WL_GPIO_VBUS_PIN)) {
-      DPRINTF("USB connected\n");
-
-      // Disable the SELECT button
-      select_coreWaitPushDisable();
-#if TUD_OPT_HIGH_SPEED
-      DPRINTF("USB High Speed enabled. Configure serial USB speed\n");
-      sdcard_setSpiSpeedSettings();
-#endif
-
-      display_usb_start();
-      usb_mass_init();
-
-      // Deinit the network
-      DPRINTF("Deinitializing the network\n");
-      network_deInit();
-
-      // Send the reboot command
-      SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_RESET);
-      sleep_ms(1000);
-      reset_device();
-
-    } else {
-      DPRINTF("USB not connected\n");
-      // Obtain the free space in the SD card
-      uint32_t total_size = 0;
-      uint32_t free_space = 0;
-      sdcard_getInfo(&fs, &total_size, &free_space);
-      appmngr_get_sdcard_info()->total_size = total_size;
-      appmngr_get_sdcard_info()->free_space = free_space;
-      DPRINTF("SD card total size: %uMB\n",
-              appmngr_get_sdcard_info()->total_size);
-      DPRINTF("SD card free space: %uMB\n",
-              appmngr_get_sdcard_info()->free_space);
-      char *apps_folder =
-          settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value;
-      if (apps_folder == NULL) {
-        appmngr_get_sdcard_info()->apps_folder_found = false;
-        DPRINTF("Apps folder param not found\n");
-      } else {
-        appmngr_get_sdcard_info()->apps_folder_found =
-            sdcard_dirExist(apps_folder);
-        DPRINTF(
-            "Apps folder found: %s\n",
+  // Obtain the free space in the SD card
+  uint32_t total_size = 0;
+  uint32_t free_space = 0;
+  sdcard_getInfo(&fs, &total_size, &free_space);
+  appmngr_get_sdcard_info()->total_size = total_size;
+  appmngr_get_sdcard_info()->free_space = free_space;
+  DPRINTF("SD card total size: %uMB\n", appmngr_get_sdcard_info()->total_size);
+  DPRINTF("SD card free space: %uMB\n", appmngr_get_sdcard_info()->free_space);
+  char *apps_folder =
+      settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value;
+  if (apps_folder == NULL) {
+    appmngr_get_sdcard_info()->apps_folder_found = false;
+    DPRINTF("Apps folder param not found\n");
+  } else {
+    appmngr_get_sdcard_info()->apps_folder_found = sdcard_dirExist(apps_folder);
+    DPRINTF("Apps folder found: %s\n",
             appmngr_get_sdcard_info()->apps_folder_found ? "true" : "false");
-      }
-    }
   }
 
   // Deinit the network
@@ -179,6 +147,19 @@ int mngr_init() {
 
   snprintf(url_ip, sizeof(url_ip), "http://%s", ip4addr_ntoa(&ip));
 
+  version_loop();
+  download_version_t version_status = version_get_status();
+  if (version_status == DOWNLOAD_VERSION_COMPLETED) {
+    DPRINTF("Version download completed successfully\n");
+    if (version_isNewer()) {
+      DPRINTF("Downloaded version is newer than the built-in version\n");
+    } else {
+      DPRINTF("Downloaded version is not newer than the built-in version\n");
+    }
+  } else {
+    DPRINTF("Version download failed or in progress\n");
+  }
+
   display_mngr_wifi_change_status(1, url_host, url_ip, NULL);
   display_refresh();
 
@@ -245,6 +226,8 @@ int mngr_init() {
   mngr_httpd_start();
   sleep_ms(500);
 
+  // appmngr_download_firmware_status(DOWNLOAD_STATUS_REQUESTED);
+
   int wifi_scan_polling_interval = 5;  // 5 seconds
   absolute_time_t wifi_scan_time =
       make_timeout_time_ms(5 * 1000);  // 3 seconds minimum for network scanning
@@ -259,9 +242,9 @@ int mngr_init() {
   while (1) {
 #if PICO_CYW43_ARCH_POLL
     network_safe_poll();
-    cyw43_arch_wait_for_work_until(wifi_scan_time);
+    cyw43_arch_wait_for_work_until(10);
 #else
-    sleep_ms(100);
+    sleep_ms(10);
 #endif
     if (network_scan_enabled) {
       network_scan(&wifi_scan_time, wifi_scan_polling_interval);
@@ -273,7 +256,8 @@ int mngr_init() {
       bypass = false;
     }
 
-    if (appmngr_get_download_status() == DOWNLOAD_STATUS_IN_PROGRESS) {
+    if (appmngr_get_download_status() == DOWNLOAD_STATUS_IN_PROGRESS ||
+        appmngr_get_download_firmware_status() == DOWNLOAD_STATUS_IN_PROGRESS) {
       appmngr_poll_download_app();
     }
 
@@ -287,7 +271,8 @@ int mngr_init() {
       case DOWNLOAD_STATUS_NOT_STARTED: {
         if ((absolute_time_diff_us(get_absolute_time(), start_download_time) <
              0)) {
-          err = appmngr_start_download_app();
+          // Start the download. NULL means use info in app_info
+          err = appmngr_start_download(NULL);
           if (err != DOWNLOAD_OK) {
             DPRINTF("Error downloading app. Drive to error page.\n");
           }
@@ -314,6 +299,47 @@ int mngr_init() {
         }
         appmngr_confirm_download_app();
         appmngr_download_status(DOWNLOAD_STATUS_IDLE);
+        break;
+      }
+    }
+
+    switch (appmngr_get_download_firmware_status()) {
+      case DOWNLOAD_STATUS_REQUESTED: {
+        start_download_time =
+            make_timeout_time_ms(3 * 1000);  // 3 seconds to start the download
+        appmngr_download_firmware_status(DOWNLOAD_STATUS_NOT_STARTED);
+        break;
+      }
+      case DOWNLOAD_STATUS_NOT_STARTED: {
+        if ((absolute_time_diff_us(get_absolute_time(), start_download_time) <
+             0)) {
+          // Start the download. NULL means use info in app_info
+          err = appmngr_start_download(FIRMWARE_BINARY_URL);
+          if (err != DOWNLOAD_OK) {
+            DPRINTF("Error downloading firmware. Drive to error page.\n");
+          }
+        }
+        break;
+      }
+      case DOWNLOAD_STATUS_STARTED: {
+        if (appmngr_get_download_firmware_error() != DOWNLOAD_OK) {
+          DPRINTF("Error downloading firmware. Drive to error page.\n");
+          appmngr_confirm_failed_download_firmware();
+          appmngr_download_firmware_status(DOWNLOAD_STATUS_FAILED);
+        } else {
+          display_mngr_change_status(5, NULL);  // Downloading firmware message
+          display_refresh();
+        }
+
+        break;
+      }
+      case DOWNLOAD_STATUS_COMPLETED: {
+        // Save the app info to the SD card
+        appmngr_download_firmware_error(DOWNLOAD_OK);
+        appmngr_download_firmware_status(DOWNLOAD_STATUS_IDLE);
+        firmware_upgrade_state = FIRMWARE_UPGRADE_DOWNLOADED;
+        display_mngr_change_status(6, NULL);  // Upgrading firmware message
+        display_refresh();
         break;
       }
     }
@@ -376,3 +402,53 @@ void mngr_schedule_factory_reset(int seconds) {
 }
 
 void mngr_loop() {}
+
+/**
+ * @brief Begin the firmware upgrade download process.
+ *
+ * Sets the firmware download state machine to REQUESTED so the main loop
+ * transitions into starting the download of the firmware binary URL.
+ * Also clears any previous firmware download error.
+ */
+void mngr_firmwareUpgradeStart(void) {
+  DPRINTF("mngr_firmwareUpgradeStart: scheduling firmware download\n");
+  firmware_upgrade_state = FIRMWARE_UPGRADE_DOWNLOADING;
+  appmngr_download_firmware_error(DOWNLOAD_OK);
+  appmngr_download_firmware_status(DOWNLOAD_STATUS_REQUESTED);
+}
+
+/**
+ * @brief Clean/reset any firmware upgrade transient state.
+ *
+ * Returns the firmware download state machine to IDLE and clears any stored
+ * error, effectively aborting or resetting the flow.
+ */
+void mngr_firmwareUpgradeClean(void) {
+  DPRINTF("mngr_firmwareUpgradeClean: resetting firmware upgrade state\n");
+  firmware_upgrade_state = FIRMWARE_UPGRADE_IDLE;
+  appmngr_download_firmware_error(DOWNLOAD_OK);
+  appmngr_download_firmware_status(DOWNLOAD_STATUS_IDLE);
+}
+
+void mngr_firmwareUpgradeInstall(void) {
+  DPRINTF("mngr_firmwareUpgradeInstall: installing firmware\n");
+  firmware_upgrade_state = FIRMWARE_UPGRADE_INSTALLING;
+  appmngr_download_firmware_error(DOWNLOAD_OK);
+  appmngr_download_firmware_status(DOWNLOAD_STATUS_IDLE);
+
+  download_err_t err = appmngr_finish_download_firmware();
+  appmngr_download_firmware_error(err);
+  if (err != DOWNLOAD_OK) {
+    DPRINTF("Error finishing download firmware\n");
+    appmngr_confirm_failed_download_firmware();
+    appmngr_download_firmware_status(DOWNLOAD_STATUS_FAILED);
+    firmware_upgrade_state = FIRMWARE_UPGRADE_FAILED;
+  } else {
+    appmngr_confirm_download_firmware();
+    appmngr_firmwareUpgradeStart();
+  }
+}
+
+firmware_upgrade_state_t mngr_get_firmwareUpgradeState(void) {
+  return firmware_upgrade_state;
+}
