@@ -11,6 +11,22 @@
 
 #include "hardware/vreg.h"
 
+// Base URL for firmware/version files (no trailing slash; can be overridden at
+// compile time)
+#ifndef SIDECART_BASE_URL
+#define SIDECART_BASE_URL "http://atarist.sidecartridge.com"
+#endif
+
+// URL to fetch the firmware binary (can be overridden at compile time)
+#ifndef FIRMWARE_BINARY_URL
+#define FIRMWARE_BINARY_URL SIDECART_BASE_URL "/upgrade.bin"
+#endif
+
+// URL to fetch the VERSION file (can be overridden at compile time)
+#ifndef VERSION_URL
+#define VERSION_URL SIDECART_BASE_URL "/SIDECARTVERSION"
+#endif
+
 // Common macros
 #define HEX_BASE 16
 #define DEC_BASE 10
