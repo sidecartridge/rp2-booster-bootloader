@@ -2,72 +2,61 @@
 <html>
 
 <head>
-    <title><!--#TITLEHDR--></title>
+  <title><!--#TITLEHDR--></title>
 
-    <!--#HOMEPAGE-->
+  <!--#HOMEPAGE-->
 
-    <link rel="icon" href="data:;base64,=">
+  <link rel="icon" href="data:;base64,=">
 
-    <meta charset="UTF-8">
-    <!-- Important for mobile: ensures responsive scaling -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="data:;base64,=">
-    <title><!--#TITLEHDR--></title>
-  
-    <!-- Pure.css (CDN) -->
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
-      integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls"
-      crossorigin="anonymous"
-    />
-    <!-- Grid responsiveness (sm, md, lg classes) -->
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css"
-    />
-    <link rel="stylesheet" href="styles.css?v=1.0" />
-    
-    <!-- Font Awesome for icons (CDN) -->
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer"
-    />
-    
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
-  
-    <script>
-        // Spinner logic
-        const spinnerFrames = ['|', '/', '-', '\\', '|', '/', '-', '\\'];
-        let currentFrame = 0;
+  <meta charset="UTF-8">
+  <!-- Important for mobile: ensures responsive scaling -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:;base64,=">
+  <title><!--#TITLEHDR--></title>
 
-        function updateSpinner() {
-            const spinner = document.getElementById('spinner-char');
-            spinner.textContent = spinnerFrames[currentFrame];
-            currentFrame = (currentFrame + 1) % spinnerFrames.length;
-        }
+  <!-- Pure.css (CDN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
+    integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous" />
+  <!-- Grid responsiveness (sm, md, lg classes) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />
+  <link rel="stylesheet" href="styles.css?v=1.0" />
 
-        // Start the spinner
-        setInterval(updateSpinner, 50);
+  <!-- Font Awesome for icons (CDN) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+    crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-        // Redirect after 10 seconds
-        setTimeout(() => {
-            window.location.href = 'http://sidecart';
-        }, 20000);
-    </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+
+  <script>
+    // Spinner logic
+    const spinnerFrames = ['|', '/', '-', '\\', '|', '/', '-', '\\'];
+    let currentFrame = 0;
+
+    function updateSpinner() {
+      const spinner = document.getElementById('spinner-char');
+      spinner.textContent = spinnerFrames[currentFrame];
+      currentFrame = (currentFrame + 1) % spinnerFrames.length;
+    }
+
+    // Start the spinner
+    setInterval(updateSpinner, 50);
+
+    // Redirect after 20 seconds
+    setTimeout(() => {
+      window.location.href = '/mngr_home.shtml';
+    }, 20000);
+  </script>
 
 </head>
 
 <body>
   <!-- Blue Banner Header -->
-    <header class="header">
-        <h1><!--#TITLEHDR--></h1>
-    </header>
-    <div id="spinner" class="spinner">
-        Deleting... <span id="spinner-char">|</span>
-    </div>
+  <header class="header">
+    <h1><!--#TITLEHDR--></h1>
+  </header>
+  <div id="spinner" class="spinner">
+    Deleting... <span id="spinner-char">|</span>
+  </div>
 </body>
 
 </html>

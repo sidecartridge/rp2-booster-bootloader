@@ -171,6 +171,10 @@
           this.apps.forEach((remoteApp) => {
             // Always add 'launched' = false
             remoteApp.launched = false;
+            // Busy flag to prevent multiple clicks on actions like Download/Update
+            if (typeof remoteApp.busy === 'undefined') {
+              remoteApp.busy = false;
+            }
 
             // See if there's a matching local app by uuid
             const localApp = this.local_apps.find((loc) => loc.uuid === remoteApp.uuid);
@@ -218,6 +222,9 @@
             console.error("App not found for UUID:", uuid);
             return;
           }
+          // Prevent multiple clicks
+          if (selectedApp.busy) return;
+          selectedApp.busy = true;
           // Prepare JSON
           selectedApp.description = ""; // Clear description to avoid size issues
           const jsonStr = JSON.stringify(selectedApp);
@@ -249,6 +256,9 @@
             console.error("App not found for UUID:", uuid);
             return;
           }
+          // Prevent multiple clicks
+          if (selectedApp.busy) return;
+          selectedApp.busy = true;
           // Prepare JSON
           selectedApp.description = ""; // Clear description to avoid size issues
           const jsonStr = JSON.stringify(selectedApp);
@@ -310,6 +320,17 @@
 
   <!-- Main Content Area -->
   <main class="main-content">
+    <!-- Informational banner if a new version is available -->
+    <div class="banner banner-info" x-data="{ show: true }" x-show="'<!--#NVERSION-->' === 'Yes' && show">
+      <i class="fas fa-info-circle banner-icon"></i>
+      <span>
+        Firmware update available (<a target="_blank"
+          href="https://github.com/sidecartridge/rp2-booster-bootloader/blob/main/CHANGELOG.md">CHANGELOG</a>):
+        <strong><!--#NVERSTR--></strong>.
+        <a href="/mngr_upgrade.shtml" class="pure-button pure-button-primary" style="margin-left: 0.5rem;">Upgrade</a>
+      </span>
+      <button class="banner-close" @click="show = false" aria-label="Close">&times;</button>
+    </div>
     <h2>Available Apps</h2>
     <p>
       Below is the list of available micro-firmwares for your device. Click the DOWNLOAD button to download your chosen
@@ -417,13 +438,16 @@
           <!-- Right-hand side: Buttons (1/6 on md) -->
           <div class="pure-u-1 pure-u-md-1-6 app-actions">
             <!-- Download button: only visible if not installed -->
-            <button class="pure-button pure-button-primary" x-show="!app.installed" @click="download(app.uuid)">
-              Download
+            <button class="pure-button pure-button-primary" x-show="!app.installed" :disabled="app.busy"
+              @click="download(app.uuid)">
+              <span x-show="!app.busy">Download</span>
+              <span x-show="app.busy">Downloading…</span>
             </button>
 
             <!-- Update button: only visible if app.update is true -->
-            <button class="pure-button" x-show="app.update" @click="confirmUpdate(app.uuid)">
-              Update
+            <button class="pure-button" x-show="app.update" :disabled="app.busy" @click="confirmUpdate(app.uuid)">
+              <span x-show="!app.busy">Update</span>
+              <span x-show="app.busy">Updating…</span>
             </button>
 
             <!-- Launch button: only visible if installed is true -->

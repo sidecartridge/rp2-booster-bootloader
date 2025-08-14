@@ -123,6 +123,18 @@
 
   <!-- Main Content -->
   <main class="main-content-full-width">
+    <!-- Informational banner if a new version is available -->
+    <div class="banner banner-info" x-data="{ show: true }" x-show="'<!--#NVERSION-->' === 'Yes' && show">
+      <i class="fas fa-info-circle banner-icon"></i>
+      <span>
+        Firmware update available (<a target="_blank"
+          href="https://github.com/sidecartridge/rp2-booster-bootloader/blob/main/CHANGELOG.md">CHANGELOG</a>):
+        <strong><!--#NVERSTR--></strong>.
+        <a href="/mngr_upgrade.shtml" class="pure-button pure-button-primary" style="margin-left: 0.5rem;">Upgrade</a>
+      </span>
+      <button class="banner-close" @click="show = false" aria-label="Close">&times;</button>
+    </div>
+
     <h2>Device Configuration</h2>
     <p>Manage your device settings here.</p>
 
