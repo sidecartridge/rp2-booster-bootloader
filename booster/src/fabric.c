@@ -27,6 +27,8 @@ static void saveWifiParams() {
   settings_save(gconfig_getContext(), true);
   DPRINTF("STA parameters save. Reboot!\n");
 
+  multicore_lockout_victim_init();  // keep the core 1 locked out
+
   // Send the reboot command
   SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_RESET);
   reset_device();
@@ -225,9 +227,9 @@ void fabric_loop() {
   while (!fabric_config.is_set) {
 #if PICO_CYW43_ARCH_POLL
     network_safe_poll();
-    cyw43_arch_wait_for_work_until(wifi_scan_time);
+    cyw43_arch_wait_for_work_until(10);
 #else
-    sleep_ms(wait_poll_interval_ms);
+    sleep_ms(10);
 #endif
     // printf("Time elapsed: %lld microseconds\n", wifi_scan_time);
     // blink_morse('A');
@@ -266,8 +268,17 @@ void fabric_loop() {
   // Deinit the DNS server
   dns_server_deinit();
 
+  // Leave the AP interface
+  cyw43_wifi_leave(&cyw43_state, CYW43_ITF_AP);
+  cyw43_wifi_set_up(&cyw43_state, CYW43_ITF_AP, false, 0);
+
   // Deinit the network
   network_deInit();
+
+  // Force hard power-off
+#ifdef CYW43_WL_GPIO_WL_REG_ON
+  cyw43_arch_gpio_put(CYW43_WL_GPIO_WL_REG_ON, 0);
+#endif
 
   // Wait for the page before rebooting
   sleep_ms(wait_poll_interval_ms);
