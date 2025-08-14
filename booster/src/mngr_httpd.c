@@ -97,8 +97,8 @@ static const char *ssi_tags[] = {
     "SFCNFGRB",  // 15 - Safe Config Reboot
     "SDBDRTKB",  // 16 - SD Card Baud Rate
     "APPSURL",   // 17 - Apps Catalog URL
-    "PLHLDR9",   // 18 - Placeholder 9
-    "PLHLDR10",  // 19 - Placeholder 10
+    "NVERSION",  // 18 - New Version
+    "NVERSTR",   // 19 - New Version String
     "PLHLDR11",  // 20 - Placeholder 11
     "PLHLDR12",  // 21 - Placeholder 12
     "PLHLDR13",  // 22 - Placeholder 13
@@ -467,6 +467,45 @@ const char *cgi_factoryreset(int iIndex, int iNumParams, char *pcParam[],
   return "/ap_step3.shtml";
 }
 
+const char *cgi_firmware_upgrade_start(int iIndex, int iNumParams,
+                                       char *pcParam[], char *pcValue[]) {
+  DPRINTF("cgi_firmware_upgrade_start called with index %d\n", iIndex);
+  mngr_firmwareUpgradeStart();
+  response_status = MNGR_HTTPD_RESPONSE_OK;
+  snprintf(httpd_response_message, sizeof(httpd_response_message), "");
+  return "/response.shtml";
+}
+
+const char *cgi_firmware_upgrade_downloaded(int iIndex, int iNumParams,
+                                            char *pcParam[], char *pcValue[]) {
+  DPRINTF("cgi_firmware_upgrade_downloaded called with index %d\n", iIndex);
+  DPRINTF("Firmware upgrade state: %d\n", mngr_get_firmwareUpgradeState());
+  if (mngr_get_firmwareUpgradeState() == FIRMWARE_UPGRADE_DOWNLOADED) {
+    response_status = MNGR_HTTPD_RESPONSE_OK;
+    snprintf(httpd_response_message, sizeof(httpd_response_message), "");
+  } else {
+    response_status = MNGR_HTTPD_RESPONSE_BAD_REQUEST;
+    snprintf(httpd_response_message, sizeof(httpd_response_message),
+             "Download firmware failed");
+  }
+  return "/response.shtml";
+}
+
+const char *cgi_firmware_upgrade_confirm(int iIndex, int iNumParams,
+                                         char *pcParam[], char *pcValue[]) {
+  DPRINTF("cgi_firmware_upgrade_confirm called with index %d\n", iIndex);
+  if (mngr_get_firmwareUpgradeState() == FIRMWARE_UPGRADE_DOWNLOADED) {
+    mngr_firmwareUpgradeInstall();
+    response_status = MNGR_HTTPD_RESPONSE_OK;
+    snprintf(httpd_response_message, sizeof(httpd_response_message), "");
+  } else {
+    response_status = MNGR_HTTPD_RESPONSE_BAD_REQUEST;
+    snprintf(httpd_response_message, sizeof(httpd_response_message),
+             "Firmware upgrade failed");
+  }
+  return "/response.shtml";
+}
+
 /**
  * @brief Array of CGI handlers for floppy select and eject operations.
  *
@@ -484,6 +523,9 @@ static const tCGI cgi_handlers[] = {
     {"/mngr_fsnext.cgi", cgi_fsnext},
     {"/mngr_deleteapp.cgi", cgi_deleteapp},
     {"/mngr_launchapp.cgi", cgi_launchapp},
+    {"/firmware_upgrade_start.cgi", cgi_firmware_upgrade_start},
+    {"/firmware_upgrade_downloaded.cgi", cgi_firmware_upgrade_downloaded},
+    {"/firmware_upgrade_confirm.cgi", cgi_firmware_upgrade_confirm},
 };
 
 /**
@@ -798,6 +840,17 @@ static u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen
           pcInsert, iInsertLen, "%s",
           settings_find_entry(gconfig_getContext(), PARAM_APPS_CATALOG_URL)
               ->value);
+      break;
+    }
+    case 18: /* NVERSION */
+    {
+      printed = snprintf(pcInsert, iInsertLen, "%s",
+                         version_isNewer() ? "Yes" : "No");
+      break;
+    }
+    case 19: /* NVERSTR */
+    {
+      printed = snprintf(pcInsert, iInsertLen, "%s", version_get_string());
       break;
     }
     case 40: /* WDHCP */
