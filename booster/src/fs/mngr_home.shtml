@@ -311,8 +311,12 @@
           <a href="/mngr_config.shtml" class="pure-menu-link">Config</a>
         </li>
         <li class="pure-menu-item">
-          <a href="https://docs.sidecartridge.com/sidecartridge-multidevice/#do-you-want-to-test-the-new-alpha-firmware"
+          <a href="https://docs.sidecartridge.com/sidecartridge-multidevice"
             target="_blank" class="pure-menu-link">Help</a>
+        </li>
+        <li class="pure-menu-item">
+          <a href="https://docs.sidecartridge.com/sidecartridge-multidevice/issues" target="_blank"
+            class="pure-menu-link">Report Issue</a>
         </li>
       </ul>
     </div>

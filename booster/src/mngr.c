@@ -377,10 +377,26 @@ int mngr_init() {
       if (absolute_time_diff_us(get_absolute_time(), factory_reset_time) < 0) {
         DPRINTF("Factory reset\n");
         factory_reset = false;
-        // Send the reboot command
-        SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_RESET);
-        sleep_ms(1000);
-        reset_deviceAndEraseFlash();
+        // Check if there is a file named .notreboot
+        // in the root of the SD card. If so, do not erase the flash
+        // Only the presence of the .notreboot file is checked; its contents are
+        // ignored.
+        FILINFO fno;
+        FRESULT res = f_stat("/.notreboot", &fno);
+        if (res == FR_OK) {
+          DPRINTF(".notreboot file found. Not erasing flash.\n");
+          display_mngr_change_status(7, NULL);  // Erase but not reboot message
+          display_refresh();
+          reset_eraseFlash();
+          while (true) {
+            sleep_ms(30000);
+          }
+        } else {
+          // Send the reboot command
+          SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_RESET);
+          sleep_ms(1000);
+          reset_deviceAndEraseFlash();
+        }
       }
     }
 
