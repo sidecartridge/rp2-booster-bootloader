@@ -72,7 +72,7 @@ void display_mngr_change_status(uint8_t status, const char *details) {
       break;
     case 7:
       snprintf(status_str, sizeof(status_str),
-               details != NULL ? details : " Erase flash, not reboot ");
+               details != NULL ? details : " Flash erased, no reboot  ");
       break;
     default:
       snprintf(status_str, sizeof(status_str), "   Launching App...  ");
