@@ -62,6 +62,21 @@ static inline void reset_jump_to_booster(void) {
 void reset_device();
 
 /**
+ * @brief Erases the flash memory.
+ *
+ * This function is responsible for erasing the flash memory. It should be used
+ * with caution as the operation is irreversible and can lead to data loss.
+ *
+ * @note Ensure that any critical data is backed up before calling this
+ * function.
+ *
+ * @warning Flash erasure may leave the device in an unstable state if the
+ * process is interrupted. It is recommended to disable interrupts and take
+ * necessary precautions prior to invoking this function.
+ */
+void reset_eraseFlash();
+
+/**
  * @brief Reset the app and reentry in the main device app in flash.
  *       Erase the flash memory before rebooting
  *
