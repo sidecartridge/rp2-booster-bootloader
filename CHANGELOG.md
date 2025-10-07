@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.0.7beta (2025-10-07) - Beta release
+
+This is the second beta release. It includes all the new features and improvements for the version 2.0.x, and it will not include any more new features but only fixes and small improvements. The code is still in development and may contain bugs, but it is stable and ready to use for all users.
+
+### Changes
+- **Link to the Report Issues page**: A link to the Report Issues page has been added to the web app at the bottom of the page. This makes it easier for users to report any issues they encounter while using the app.
+
+### New features
+- **New ./noreboot file**: A new `./noreboot` file has been introduced. If this file is present on the microSD card, the device will not reboot automatically if the user performos a reset to the factory settings. This feature is useful during the development and testing phases, because comnbined with the `./wificonf` file, it allows to test the device without the need to reconfigure the WiFi settings after each reset.
+
+### Fixes
+No fixes in this release.
+
+---
+
 ## v2.0.6beta (2025-08-14) - Beta release
 
 This is the first beta release. It includes all the new features and improvements for the version 2.0.x, and it will not include any more new features. The code is still in development and may contain bugs, but it is more stable than previous alpha releases and ready to use for all users.
