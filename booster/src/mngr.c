@@ -377,7 +377,7 @@ int mngr_init() {
       if (absolute_time_diff_us(get_absolute_time(), factory_reset_time) < 0) {
         DPRINTF("Factory reset\n");
         factory_reset = false;
-        // Check if there is a file named DO_NOT_REBOOT_IF_FACTORY_RESET
+        // Check if there is a file named .notreboot
         // in the root of the SD card. If so, do not erase the flash
         FILINFO fno;
         FRESULT res = f_stat("/.notreboot", &fno);
