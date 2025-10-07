@@ -70,6 +70,10 @@ void display_mngr_change_status(uint8_t status, const char *details) {
       snprintf(status_str, sizeof(status_str),
                details != NULL ? details : "Firmware ready for upgrade");
       break;
+    case 7:
+      snprintf(status_str, sizeof(status_str),
+               details != NULL ? details : " Erase flash, not reboot ");
+      break;
     default:
       snprintf(status_str, sizeof(status_str), "   Launching App...  ");
       break;
