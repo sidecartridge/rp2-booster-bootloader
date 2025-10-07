@@ -8,7 +8,7 @@ This is the second beta release. It includes all the new features and improvemen
 - **Link to the Report Issues page**: A link to the Report Issues page has been added to the web app at the bottom of the page. This makes it easier for users to report any issues they encounter while using the app.
 
 ### New features
-- **New ./noreboot file**: A new `./noreboot` file has been introduced. If this file is present on the microSD card, the device will not reboot automatically if the user performs a reset to the factory settings. This feature is useful during the development and testing phases, because combined with the `./wificonf` file, it allows to test the device without the need to reconfigure the WiFi settings after each reset.
+- **New ./notreboot file**: A new `./notreboot` file has been introduced. If this file is present on the microSD card, the device will not reboot automatically if the user performs a reset to the factory settings. This feature is useful during the development and testing phases, because combined with the `./wificonf` file, it allows to test the device without the need to reconfigure the WiFi settings after each reset.
 
 ### Fixes
 No fixes in this release.
