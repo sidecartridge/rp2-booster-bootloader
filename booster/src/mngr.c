@@ -379,6 +379,8 @@ int mngr_init() {
         factory_reset = false;
         // Check if there is a file named .notreboot
         // in the root of the SD card. If so, do not erase the flash
+        // Only the presence of the .notreboot file is checked; its contents are
+        // ignored.
         FILINFO fno;
         FRESULT res = f_stat("/.notreboot", &fno);
         if (res == FR_OK) {
