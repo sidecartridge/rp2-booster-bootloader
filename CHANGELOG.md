@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.0.8 (2025-10-16) - First stable release
+
+This is the first stable release of the 2.0.x series. The code has been tested and is considered stable. 
+
+### Changes
+No changes in this release.
+
+### New features
+No new features in this release.
+
+### Fixes
+No fixes in this release.
+
+---
+
 ## v2.0.7beta (2025-10-07) - Beta release
 
 This is the second beta release. It includes all the new features and improvements for the version 2.0.x, and it will not include any more new features but only fixes and small improvements. The code is still in development and may contain bugs, but it is stable and ready to use for all users.
