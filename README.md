@@ -1,5 +1,8 @@
 # Raspberry Pi Pico W Booster Loader  
 
+![Discord](https://img.shields.io/discord/1160868666162823218?style=flat&label=Discord&link=https%3A%2F%2Fdiscord.com%2Finvite%2Fu73QP9MEYC)
+
+
 This is an advanced second-stage bootloader for the Raspberry Pi Pico W and the SidecarTridge Multidevice board. The current version is designed for the RP2040-based Pico W, but future releases will support the RP235x series and move beyond the Atari ST architecture.  
 
 ## Key Features  
