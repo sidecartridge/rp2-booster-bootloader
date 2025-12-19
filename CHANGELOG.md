@@ -11,7 +11,7 @@ No changes in this release.
 - Shows the MAC address of the Pico W in the Atari ST screen and system information banner at the bottom of the web pages.
 
 ### Fixes
-- The DMA memory copy to ROM in RAM gets the number of bytes to copy instead of words. For consistency with the microfirwmwares.
+- The DMA memory copy to ROM in RAM gets the number of bytes to copy instead of words. For consistency with the microfirmwares.
 
 ---
 
