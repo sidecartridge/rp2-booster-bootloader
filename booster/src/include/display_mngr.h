@@ -32,6 +32,9 @@
   "                                                                          " \
   "      "
 
+#define DISPLAY_STRETCHED_TILES_WIDTH \
+  68  // Tile width when using squeezed/stretched fonts
+
 // For Atari ST display
 #ifdef DISPLAY_ATARIST
 #define DISPLAY_MANAGER_BYPASS_MESSAGE \

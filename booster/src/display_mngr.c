@@ -41,7 +41,9 @@ void draw_connection_scr(const uint8_t qrcode_url[], const char *ssid,
 
   // ByPass message
   u8g2_DrawStr(display_get_u8g2_ref(),
-               LEFT_PADDING_FOR_CENTER(DISPLAY_MANAGER_BYPASS_MESSAGE, 68) * 5,
+               LEFT_PADDING_FOR_CENTER(DISPLAY_MANAGER_BYPASS_MESSAGE,
+                                       DISPLAY_STRETCHED_TILES_WIDTH) *
+                   5,
                DISPLAY_HEIGHT - 9, DISPLAY_MANAGER_BYPASS_MESSAGE);
 }
 
@@ -91,6 +93,17 @@ void display_mngr_wifi_change_status(uint8_t wifi_status, const char *url1,
   display_mngr_change_status(wifi_status, details);
 
   if (wifi_status == 1) {
+    if (details != NULL && strlen(details) > 0) {
+      char mac_line[64] = {0};
+      snprintf(mac_line, sizeof(mac_line), "MAC: %s", details);
+      u8g2_SetFont(display_get_u8g2_ref(), u8g2_font_squeezed_b7_tr);
+      u8g2_DrawStr(display_get_u8g2_ref(),
+                   LEFT_PADDING_FOR_CENTER(mac_line,
+                                           DISPLAY_STRETCHED_TILES_WIDTH) *
+                       5,
+                   8, mac_line);
+    }
+
     u8g2_SetDrawColor(display_get_u8g2_ref(), 0);
     u8g2_DrawBox(display_get_u8g2_ref(), 0, DISPLAY_HEIGHT - 24, DISPLAY_WIDTH,
                  8);
@@ -101,7 +114,10 @@ void display_mngr_wifi_change_status(uint8_t wifi_status, const char *url1,
     snprintf(url_str, sizeof(url_str), "%s or %s", url1, url2);
     u8g2_SetFont(display_get_u8g2_ref(), u8g2_font_squeezed_b7_tr);
     u8g2_DrawStr(display_get_u8g2_ref(),
-                 LEFT_PADDING_FOR_CENTER(DISPLAY_BYPASS_MESSAGE, 68) * 5, 16,
+                 LEFT_PADDING_FOR_CENTER(DISPLAY_BYPASS_MESSAGE,
+                                         DISPLAY_STRETCHED_TILES_WIDTH) *
+                     5,
+                 19,
                  url_str);
   }
   if (wifi_status == 2) {
@@ -109,12 +125,15 @@ void display_mngr_wifi_change_status(uint8_t wifi_status, const char *url1,
     u8g2_SetFont(display_get_u8g2_ref(), u8g2_font_squeezed_b7_tr);
     u8g2_DrawStr(
         display_get_u8g2_ref(),
-        LEFT_PADDING_FOR_CENTER(DISPLAY_MNGR_SELECT_RESET_MESSAGE, 68) * 5,
+        LEFT_PADDING_FOR_CENTER(DISPLAY_MNGR_SELECT_RESET_MESSAGE,
+                                DISPLAY_STRETCHED_TILES_WIDTH) *
+            5,
         DISPLAY_HEIGHT - 17, DISPLAY_MNGR_SELECT_RESET_MESSAGE);
   } else {
     // Clear the error message
     // u8g2_DrawStr(display_get_u8g2_ref(),
-    //              LEFT_PADDING_FOR_CENTER(DISPLAY_MNGR_EMPTY_MESSAGE, 68) * 5,
+    //              LEFT_PADDING_FOR_CENTER(DISPLAY_MNGR_EMPTY_MESSAGE,
+    //                                      DISPLAY_STRETCHED_TILES_WIDTH) * 5,
     //              DISPLAY_HEIGHT - 8, DISPLAY_MNGR_EMPTY_MESSAGE);
   }
 }

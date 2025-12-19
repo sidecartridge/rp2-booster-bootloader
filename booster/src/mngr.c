@@ -146,6 +146,8 @@ int mngr_init() {
   DPRINTF("IP address: %s\n", ip4addr_ntoa(&ip));
 
   snprintf(url_ip, sizeof(url_ip), "http://%s", ip4addr_ntoa(&ip));
+  const char *mac_str = network_getCyw43MacStr();
+  DPRINTF("MAC address: %s\n", mac_str);
 
   version_loop();
   download_version_t version_status = version_get_status();
@@ -160,7 +162,7 @@ int mngr_init() {
     DPRINTF("Version download failed or in progress\n");
   }
 
-  display_mngr_wifi_change_status(1, url_host, url_ip, NULL);
+  display_mngr_wifi_change_status(1, url_host, url_ip, mac_str);
   display_refresh();
 
   // Init the download apps

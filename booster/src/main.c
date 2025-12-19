@@ -103,7 +103,7 @@ int main() {
   select_coreWaitPush(reset_device, reset_deviceAndEraseFlash);
 
   // Copy the terminal firmware to RAM
-  COPY_FIRMWARE_TO_RAM((uint16_t *)term_firmware, term_firmware_length);
+  COPY_FIRMWARE_TO_RAM((uint16_t *)term_firmware, term_firmware_length * 2);
 
   // Init the terminal emulator
   term_init();

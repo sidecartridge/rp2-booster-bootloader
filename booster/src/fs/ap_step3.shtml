@@ -127,6 +127,7 @@
                     continues blinking, press and hold the SELECT button for a few seconds to restart the configuration
                     process again.
                 </p>
+                <p><strong>MAC:</strong> <!--#MACADDR--></p>
                 <br />
                 <div id="spinner" class="spinner">
                     Restarting <span id="spinner-char">|</span>

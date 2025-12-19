@@ -62,6 +62,7 @@ const char *ssi_tags[] = {
     "WIFISSID",  // 2
     "WIFIAUTH",  // 3
     "TITLEHDR",  // 4
+    "MACADDR",   // 5
 };
 
 /**
@@ -240,6 +241,12 @@ u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen
       printed = snprintf(pcInsert, iInsertLen, "%s (%s-%s)", BOOSTER_TITLE,
                          RELEASE_VERSION, RELEASE_DATE);
 #endif
+      break;
+    }
+    case 5: /* MACADDR */
+    {
+      const char *mac = network_getCyw43MacStr();
+      printed = snprintf(pcInsert, iInsertLen, "%s", mac != NULL ? mac : "");
       break;
     }
     default: /* unknown tag */

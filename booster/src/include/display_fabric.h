@@ -28,7 +28,9 @@
 #define DISPLAY_CONNECTION_STEP1_MSG "Step 1: Connect to device WiFi"
 #define DISPLAY_CONNECTION_STEP2_MSG "Step 2: Open device portal"
 
-void display_fabric_start(const char *ssid, const char *password, const char *auth, const char *url1, const char *url2);
+void display_fabric_start(const char *ssid, const char *password,
+                          const char *auth, const char *url1,
+                          const char *url2);
 void display_fabric_portal_connection();
 void display_fabric_wifi_change_status(uint8_t wifi_status);
 void display_fabric_portal_change_status(uint8_t portal_status);

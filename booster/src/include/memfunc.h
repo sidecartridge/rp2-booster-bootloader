@@ -21,11 +21,11 @@
     COPY_FIRMWARE_TO_RAM_DMA(emulROM, emulROM_length); \
   } while (0)
 
-#define ERASE_FIRMWARE_IN_RAM()                               \
-  do {                                                        \
-    memset((void *)&__rom_in_ram_start__, 0,                  \
-           ROM_SIZE_LONGWORDS *ROM_BANKS * sizeof(uint32_t)); \
-    DPRINTF("RAM for the firmware zeroed.\n");                \
+#define ERASE_FIRMWARE_IN_RAM()                                \
+  do {                                                         \
+    memset((void *)&__rom_in_ram_start__, 0,                   \
+           ROM_SIZE_LONGWORDS * ROM_BANKS * sizeof(uint32_t)); \
+    DPRINTF("RAM for the firmware zeroed.\n");                 \
   } while (0)
 
 #define COPY_FIRMWARE_TO_RAM_MEMCPY(emulROM, emulROM_length)                   \
@@ -39,7 +39,7 @@
     while (!(xip_ctrl_hw->stat & XIP_STAT_FIFO_EMPTY))                        \
       (void)xip_ctrl_hw->stream_fifo;                                         \
     xip_ctrl_hw->stream_addr = (uint32_t)&(emulROM)[0];                       \
-    xip_ctrl_hw->stream_ctr = (emulROM_length) / 2;                           \
+    xip_ctrl_hw->stream_ctr = (emulROM_length) / 4;                           \
     const uint dma_chan = dma_claim_unused_channel(true);                     \
     dma_channel_config cfg = dma_channel_get_default_config(dma_chan);        \
     channel_config_set_read_increment(&cfg, false);                           \
@@ -48,7 +48,7 @@
     dma_channel_configure(dma_chan, &cfg,                                     \
                           (void *)&__rom_in_ram_start__, /* Write addr */     \
                           (const void *)XIP_AUX_BASE,    /* Read addr */      \
-                          (emulROM_length) / 2,          /* Transfer count */ \
+                          (emulROM_length) / 4,          /* Transfer count */ \
                           true /* Start immediately! */                       \
     );                                                                        \
     while (dma_channel_is_busy(dma_chan)) {                                   \

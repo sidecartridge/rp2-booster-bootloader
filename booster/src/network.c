@@ -8,6 +8,7 @@ static bool wifiScanInProgress = false;
 static char wifiHostname[NETWORK_MAX_STRING_LENGTH];
 static ip_addr_t currentIp = {0};
 static uint8_t cyw43Mac[NETWORK_MAC_SIZE];
+static char cyw43MacStr[NETWORK_MAX_STRING_LENGTH];
 static wifi_sta_conn_status_t connectionStatus = DISCONNECTED;
 static char connectionStatusStr[NETWORK_MAX_STRING_LENGTH] = {0};
 
@@ -830,3 +831,22 @@ wifi_sta_conn_status_t network_wifiConnStatus(
  * @return The current IP address as an ip_addr_t structure.
  */
 ip_addr_t network_getCurrentIp() { return currentIp; }
+
+const char *network_getCyw43MacStr() {
+  if (!cyw43Initialized) {
+    cyw43MacStr[0] = '\0';
+    return cyw43MacStr;
+  }
+
+  int res = cyw43_wifi_get_mac(&cyw43_state, CYW43_ITF_STA, cyw43Mac);
+  if (res != 0) {
+    DPRINTF("Failed to get MAC address: %d\n", res);
+    cyw43MacStr[0] = '\0';
+    return cyw43MacStr;
+  }
+
+  snprintf(cyw43MacStr, sizeof(cyw43MacStr),
+           "%02x:%02x:%02x:%02x:%02x:%02x", cyw43Mac[0], cyw43Mac[1],
+           cyw43Mac[2], cyw43Mac[3], cyw43Mac[4], cyw43Mac[5]);
+  return cyw43MacStr;
+}

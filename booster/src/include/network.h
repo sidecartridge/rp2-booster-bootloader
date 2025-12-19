@@ -259,6 +259,17 @@ const char* network_getAuthTypeStringShort(uint16_t connect_code);
 ip_addr_t network_getCurrentIp();
 
 /**
+ * @brief Retrieves the CYW43 MAC address as a colon-separated string.
+ *
+ * The returned pointer refers to a static buffer that is overwritten on each
+ * call. An empty string is returned if the MAC cannot be read or WiFi is not
+ * initialized.
+ *
+ * @return Pointer to a null-terminated string containing the MAC address.
+ */
+const char* network_getCyw43MacStr();
+
+/**
  * @brief Parses and cleans up an SSID string.
  *
  * This function processes the input SSID and ensures it meets the required
