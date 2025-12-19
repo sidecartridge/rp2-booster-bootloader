@@ -14,7 +14,7 @@ export PICO_SDK_PATH=$PWD/pico-sdk
 echo "Pinning the SDK versions..."
 cd pico-sdk
 #git checkout tags/2.1.0
-git checkout tags/2.1.1
+git checkout tags/2.2.0
 cd ..
 
 # Return to placeholder path
