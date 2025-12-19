@@ -1,5 +1,20 @@
 # Changelog
 
+## v2.0.9 (2025-12-20) - release
+
+This release now shows the MAC address to help users to configure their home router filters.
+
+### Changes
+No changes in this release.
+
+### New features
+- Shows the MAC address of the Pico W in the Atari ST screen and system information banner at the bottom of the web pages.
+
+### Fixes
+- The DMA memory copy to ROM in RAM gets the number of bytes to copy instead of words. For consistency with the microfirwmwares.
+
+---
+
 ## v2.0.8 (2025-10-16) - First stable release
 
 This is the first stable release of the 2.0.x series. The code has been tested and is considered stable. 
