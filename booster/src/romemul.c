@@ -209,7 +209,7 @@ int init_romemul(IRQInterceptionCallback requestCallback,
   if (copyFlashToRAM) {
     const uint16_t *src_addr =
         (const uint16_t *)(XIP_BASE + FLASH_ROM_LOAD_OFFSET);
-    COPY_FIRMWARE_TO_RAM(src_addr, ROM_SIZE_WORDS * ROM_BANKS);
+    COPY_FIRMWARE_TO_RAM(src_addr, ROM_SIZE_WORDS * ROM_BANKS * 2);
   }
 
   int smMonitorROM4 = init_monitor_rom4(default_pio);
