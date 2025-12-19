@@ -128,6 +128,7 @@ static const char *ssi_tags[] = {
     "WHSTNM",    // 46 - WiFi Hostname
     "WPWR",      // 47 - WiFi Power
     "WRSS",      // 48 - WiFi RSSI
+    "MACADDR",   // 49 - Device MAC address
 };
 
 /**
@@ -922,6 +923,12 @@ static u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen
               "true") == 0
               ? "Yes"
               : "No");
+      break;
+    }
+    case 49: /* MACADDR */
+    {
+      const char *mac = network_getCyw43MacStr();
+      printed = snprintf(pcInsert, iInsertLen, "%s", mac != NULL ? mac : "");
       break;
     }
     default: /* unknown tag */

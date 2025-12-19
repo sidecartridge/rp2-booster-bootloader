@@ -558,6 +558,15 @@
           <div class="value-cell"><!--#IPADDR--></div>
         </div>
       </li>
+      <li class="system-item pure-u-1 pure-u-sm-1-2">
+        <div class="item-inner">
+          <div class="label-cell">
+            <i class="fas fa-id-badge"></i>
+            <span>MAC address</span>
+          </div>
+          <div class="value-cell"><!--#MACADDR--></div>
+        </div>
+      </li>
     </ul>
   </section>
 
