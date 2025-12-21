@@ -34,7 +34,7 @@ void draw_connection_scr(const uint8_t qrcode_url[], const char *ssid,
                ssid_str);
 
   // Wifi status
-  display_mngr_wifi_change_status(wifi_status, url1, url2, NULL);
+  display_mngr_wifi_change_status(wifi_status, url1, url2, NULL, NULL);
 
   // Product info
   display_draw_product_info();
@@ -88,22 +88,24 @@ void display_mngr_change_status(uint8_t status, const char *details) {
 
 // Change the wifi status in the buffer
 void display_mngr_wifi_change_status(uint8_t wifi_status, const char *url1,
-                                     const char *url2, const char *details) {
+                                     const char *url2,
+                                     const char *status_details,
+                                     const char *mac_str) {
   // Wifi status
-  display_mngr_change_status(wifi_status, details);
+  display_mngr_change_status(wifi_status, status_details);
+
+  if (mac_str != NULL) {
+    char mac_line[64] = {0};
+    snprintf(mac_line, sizeof(mac_line), "MAC: %s", mac_str);
+    u8g2_SetFont(display_get_u8g2_ref(), u8g2_font_squeezed_b7_tr);
+    u8g2_DrawStr(display_get_u8g2_ref(),
+                 LEFT_PADDING_FOR_CENTER(mac_line,
+                                         DISPLAY_STRETCHED_TILES_WIDTH) *
+                     5,
+                 8, mac_line);
+  }
 
   if (wifi_status == 1) {
-    if (details != NULL && strlen(details) > 0) {
-      char mac_line[64] = {0};
-      snprintf(mac_line, sizeof(mac_line), "MAC: %s", details);
-      u8g2_SetFont(display_get_u8g2_ref(), u8g2_font_squeezed_b7_tr);
-      u8g2_DrawStr(display_get_u8g2_ref(),
-                   LEFT_PADDING_FOR_CENTER(mac_line,
-                                           DISPLAY_STRETCHED_TILES_WIDTH) *
-                       5,
-                   8, mac_line);
-    }
-
     u8g2_SetDrawColor(display_get_u8g2_ref(), 0);
     u8g2_DrawBox(display_get_u8g2_ref(), 0, DISPLAY_HEIGHT - 24, DISPLAY_WIDTH,
                  8);
