@@ -59,13 +59,88 @@
           return {
             params: [],
             originalParams: [],
+            countryOptions: [
+              { code: "XX", name: "Worldwide" },
+              { code: "AU", name: "Australia" },
+              { code: "AR", name: "Argentina" },
+              { code: "AT", name: "Austria" },
+              { code: "BE", name: "Belgium" },
+              { code: "BR", name: "Brazil" },
+              { code: "CA", name: "Canada" },
+              { code: "CL", name: "Chile" },
+              { code: "CN", name: "China" },
+              { code: "CO", name: "Colombia" },
+              { code: "CZ", name: "Czech Republic" },
+              { code: "DK", name: "Denmark" },
+              { code: "EE", name: "Estonia" },
+              { code: "FI", name: "Finland" },
+              { code: "FR", name: "France" },
+              { code: "DE", name: "Germany" },
+              { code: "GR", name: "Greece" },
+              { code: "HK", name: "Hong Kong" },
+              { code: "HU", name: "Hungary" },
+              { code: "IS", name: "Iceland" },
+              { code: "IN", name: "India" },
+              { code: "IL", name: "Israel" },
+              { code: "IT", name: "Italy" },
+              { code: "JP", name: "Japan" },
+              { code: "KE", name: "Kenya" },
+              { code: "LV", name: "Latvia" },
+              { code: "LI", name: "Liechtenstein" },
+              { code: "LT", name: "Lithuania" },
+              { code: "LU", name: "Luxembourg" },
+              { code: "MY", name: "Malaysia" },
+              { code: "MT", name: "Malta" },
+              { code: "MX", name: "Mexico" },
+              { code: "NL", name: "Netherlands" },
+              { code: "NZ", name: "New Zealand" },
+              { code: "NG", name: "Nigeria" },
+              { code: "NO", name: "Norway" },
+              { code: "PE", name: "Peru" },
+              { code: "PH", name: "Philippines" },
+              { code: "PL", name: "Poland" },
+              { code: "PT", name: "Portugal" },
+              { code: "SG", name: "Singapore" },
+              { code: "SK", name: "Slovakia" },
+              { code: "SI", name: "Slovenia" },
+              { code: "ZA", name: "South Africa" },
+              { code: "KR", name: "South Korea" },
+              { code: "ES", name: "Spain" },
+              { code: "SE", name: "Sweden" },
+              { code: "CH", name: "Switzerland" },
+              { code: "TW", name: "Taiwan" },
+              { code: "TH", name: "Thailand" },
+              { code: "TR", name: "Turkey" },
+              { code: "GB", name: "United Kingdom" },
+              { code: "US", name: "United States" }
+            ],
+            powerProfiles: [
+              { value: '0', title: 'Disabled PM', detail: 'No power saving. Best throughput and lowest latency.' },
+              { value: '1', title: 'Performance', detail: 'Balanced power use with responsive WiFi.' },
+              { value: '2', title: 'Aggressive', detail: 'Lower power use. May add latency or reduce speed.' },
+              { value: '3', title: 'Default', detail: 'Default policy for general use.' },
+              { value: '4', title: 'No Powersave', detail: 'Always-on radio. Highest power draw.' }
+            ],
             showInfo: showInfoCallback,
             showError: showErrorCallback,
+            normalizeCountry(value) {
+              const code = String(value || '').trim().toUpperCase();
+              return this.countryOptions.some(option => option.code === code) ? code : 'XX';
+            },
+            powerProfileFor(value) {
+              const key = String(value ?? '0');
+              return this.powerProfiles.find(profile => profile.value === key) || this.powerProfiles[0];
+            },
             init() {
               fetch('/wificonf.shtml')
                 .then(response => response.json())
                 .then(data => {
-                  this.params = data.params || [];
+                  this.params = (data.params || []).map(param => {
+                    if (param.name === 'WIFI_COUNTRY') {
+                      return { ...param, value: this.normalizeCountry(param.value) };
+                    }
+                    return param;
+                  });
                   this.originalParams = JSON.parse(JSON.stringify(this.params));
                 })
                 .catch(err => console.error('Error fetching wifi params:', err));
@@ -325,14 +400,33 @@
 
           <!-- Right Column (input control) -->
           <div class="pure-u-1 pure-u-md-2-3">
-            <!-- STRING type: up to 128 chars -->
-            <template x-if="param.type === 'STRING'">
+            <!-- Country Select -->
+            <template x-if="param.type === 'STRING' && param.name === 'WIFI_COUNTRY'">
+              <select class="pure-input-1" x-model="param.value" :title="param.placeholder || ''">
+                <template x-for="option in countryOptions" :key="option.code">
+                  <option :value="option.code" x-text="`${option.name} (${option.code})`"></option>
+                </template>
+              </select>
+            </template>
+
+            <!-- Other String Inputs -->
+            <template x-if="param.type === 'STRING' && param.name !== 'WIFI_COUNTRY'">
               <input type="text" class="pure-input-1" :placeholder="param.placeholder || ''" maxlength="128"
                 x-model="param.value" />
             </template>
 
             <!-- INT type: 0..65535 with real-time clamping -->
-            <template x-if="param.type === 'INT'">
+            <template x-if="param.type === 'INT' && param.name === 'WIFI_POWER'">
+              <div>
+                <select class="pure-input-1" x-model="param.value">
+                  <template x-for="profile in powerProfiles" :key="profile.value">
+                    <option :value="profile.value" x-text="`${profile.title} (${profile.detail})`"></option>
+                  </template>
+                </select>
+              </div>
+            </template>
+
+            <template x-if="param.type === 'INT' && param.name !== 'WIFI_POWER'">
               <input type="number" class="pure-input-1" :placeholder="param.placeholder || ''" min="0" max="65535"
                 x-model="param.value" @input="
                   let raw = $event.target.value;
