@@ -12,6 +12,7 @@ This release now shows the MAC address to help users to configure their home rou
 
 ### New features
 - Shows the MAC address of the Pico W in the Atari ST screen and system information banner at the bottom of the web pages.
+- Added AGENTS.md file with instructions for AI agentic development. 
 
 ### Fixes
 - The DMA memory copy to ROM in RAM gets the number of bytes to copy instead of words. For consistency with the microfirmwares.
