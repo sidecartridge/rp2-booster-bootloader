@@ -106,6 +106,10 @@ int mngr_init() {
     blink_error();
     return err;
   }
+  const char *mac_str = network_getCyw43MacStr();
+  DPRINTF("MAC address: %s\n", mac_str);
+  display_mngr_wifi_change_status(0, NULL, NULL, NULL, mac_str);
+  display_refresh();
 
   // Connect to the WiFi network
   int numRetries = 3;
@@ -118,19 +122,21 @@ int mngr_init() {
       if (--numRetries <= 0) {
         DPRINTF("Max retries reached. Exiting...\n");
         display_mngr_wifi_change_status(2, NULL, NULL,
-                                        "Max retries reached. Exiting...");
+                                        "Max retries reached. Exiting...",
+                                        mac_str);
         display_refresh();
         blink_error();
         sleep_ms(1000);
         return err;
       } else {
         display_mngr_wifi_change_status(
-            2, NULL, NULL, network_WifiStaConnStatusString(err));  // Error
+            2, NULL, NULL, network_WifiStaConnStatusString(err),
+            mac_str);  // Error
         display_refresh();
       }
       sleep_ms(3000);  // Wait before retrying
-      display_mngr_wifi_change_status(0, NULL, NULL,
-                                      NULL);  // Reset to connecting status
+      display_mngr_wifi_change_status(0, NULL, NULL, NULL,
+                                      mac_str);  // Reset to connecting status
       display_refresh();
     }
   }
@@ -146,9 +152,6 @@ int mngr_init() {
   DPRINTF("IP address: %s\n", ip4addr_ntoa(&ip));
 
   snprintf(url_ip, sizeof(url_ip), "http://%s", ip4addr_ntoa(&ip));
-  const char *mac_str = network_getCyw43MacStr();
-  DPRINTF("MAC address: %s\n", mac_str);
-
   version_loop();
   download_version_t version_status = version_get_status();
   if (version_status == DOWNLOAD_VERSION_COMPLETED) {
@@ -162,7 +165,7 @@ int mngr_init() {
     DPRINTF("Version download failed or in progress\n");
   }
 
-  display_mngr_wifi_change_status(1, url_host, url_ip, mac_str);
+  display_mngr_wifi_change_status(1, url_host, url_ip, NULL, mac_str);
   display_refresh();
 
   // Init the download apps

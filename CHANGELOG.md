@@ -8,6 +8,7 @@ This release now shows the MAC address to help users to configure their home rou
 - Show the WiFi countries as a drop down list instead of a text input, to avoid invalid country codes.
 - Show the available power WiFi network options as a drop down list instead of a text input, to avoid invalid power values.
 - Show the range of SD baud rate values (KB/s) as a drop down list instead of a text input, to avoid invalid speed values.
+- Shows the MAC address always on the Atari ST connection screen, even if the device is not connected to a WiFi network.
 
 ### New features
 - Shows the MAC address of the Pico W in the Atari ST screen and system information banner at the bottom of the web pages.
