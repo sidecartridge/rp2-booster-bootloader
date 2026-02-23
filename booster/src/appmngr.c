@@ -630,6 +630,8 @@ const char *appmngr_get_download_error_str() {
       return "Error parsing MD5";
     case DOWNLOAD_CANNOTOPENFILE_ERROR:
       return "Cannot open file";
+    case DOWNLOAD_CANNOTWRITEFILE_ERROR:
+      return "Cannot write file";
     case DOWNLOAD_CANNOTCLOSEFILE_ERROR:
       return "Cannot close file";
     case DOWNLOAD_FORCEDABORT_ERROR:
@@ -1586,6 +1588,25 @@ download_err_t appmngr_start_download(const char *url) {
   if (res != FR_OK) {
     DPRINTF("Error opening file %s: %i\n", filename, res);
     return DOWNLOAD_CANNOTOPENFILE_ERROR;
+  }
+
+  UINT bw = 0;
+  const uint8_t probe_byte = 0;
+  res = f_write(&file, &probe_byte, sizeof(probe_byte), &bw);
+  if (res != FR_OK || bw != sizeof(probe_byte)) {
+    DPRINTF("Error probing file write %s: %i (wrote %u of %u)\n", filename, res,
+            (unsigned)bw, (unsigned)sizeof(probe_byte));
+    f_close(&file);
+    return DOWNLOAD_CANNOTWRITEFILE_ERROR;
+  }
+  res = f_lseek(&file, 0);
+  if (res == FR_OK) {
+    res = f_truncate(&file);
+  }
+  if (res != FR_OK) {
+    DPRINTF("Error resetting temp file %s: %i\n", filename, res);
+    f_close(&file);
+    return DOWNLOAD_CANNOTWRITEFILE_ERROR;
   }
 
   // Get the components of a url
