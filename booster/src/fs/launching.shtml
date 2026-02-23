@@ -39,9 +39,9 @@
     setInterval(updateSpinner, 50);
 
     // Polling logic
-    let pollInterval = 30000; // 30 seconds
+    const initialPollDelay = 30000; // 30 seconds
+    const pollInterval = 5000; // 5 seconds after first poll
     let pollTimer = null;
-    let firstPollDone = false;
 
     function showAppLaunchedMsg() {
       const spinner = document.getElementById('spinner');
@@ -55,7 +55,7 @@
         .then(response => {
           if (response.ok) {
             // If the resource exists, redirect
-            window.location.href = '/mngr_home.shtml';
+            window.location.href = '/';
           } else {
             // Not 200 OK
             showAppLaunchedMsg();
@@ -66,16 +66,13 @@
           showAppLaunchedMsg();
         })
         .finally(() => {
-          // Keep polling every 30s only if not redirected
-          if (!firstPollDone) {
-            firstPollDone = true;
-          }
+          // Keep polling every 5s only if not redirected
           pollTimer = setTimeout(pollLaunching, pollInterval);
         });
     }
 
     // Wait 30s, then start polling
-    setTimeout(pollLaunching, pollInterval);
+    setTimeout(pollLaunching, initialPollDelay);
   </script>
 </head>
 
