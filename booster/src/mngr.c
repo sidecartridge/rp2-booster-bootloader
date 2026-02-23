@@ -121,17 +121,16 @@ int mngr_init() {
       DPRINTF("Number of retries left: %i\n", numRetries);
       if (--numRetries <= 0) {
         DPRINTF("Max retries reached. Exiting...\n");
-        display_mngr_wifi_change_status(2, NULL, NULL,
-                                        "Max retries reached. Exiting...",
-                                        mac_str);
+        display_mngr_wifi_change_status(
+            2, NULL, NULL, "Max retries reached. Exiting...", mac_str);
         display_refresh();
         blink_error();
         sleep_ms(1000);
         return err;
       } else {
-        display_mngr_wifi_change_status(
-            2, NULL, NULL, network_WifiStaConnStatusString(err),
-            mac_str);  // Error
+        display_mngr_wifi_change_status(2, NULL, NULL,
+                                        network_WifiStaConnStatusString(err),
+                                        mac_str);  // Error
         display_refresh();
       }
       sleep_ms(3000);  // Wait before retrying
@@ -247,9 +246,23 @@ int mngr_init() {
   while (1) {
 #if PICO_CYW43_ARCH_POLL
     network_safe_poll();
-    cyw43_arch_wait_for_work_until(10);
+    int wait_ms = 10;
+    if (appmngr_get_download_status() == DOWNLOAD_STATUS_IN_PROGRESS ||
+        appmngr_get_download_firmware_status() == DOWNLOAD_STATUS_IN_PROGRESS ||
+        appmngr_get_launch_status() == DOWNLOAD_LAUNCHAPP_INPROGRESS ||
+        appmngr_get_launch_status() == DOWNLOAD_LAUNCHAPP_SCHEDULED) {
+      wait_ms = 1;
+    }
+    cyw43_arch_wait_for_work_until(make_timeout_time_ms(wait_ms));
 #else
-    sleep_ms(10);
+    int wait_ms = 10;
+    if (appmngr_get_download_status() == DOWNLOAD_STATUS_IN_PROGRESS ||
+        appmngr_get_download_firmware_status() == DOWNLOAD_STATUS_IN_PROGRESS ||
+        appmngr_get_launch_status() == DOWNLOAD_LAUNCHAPP_INPROGRESS ||
+        appmngr_get_launch_status() == DOWNLOAD_LAUNCHAPP_SCHEDULED) {
+      wait_ms = 1;
+    }
+    sleep_ms(wait_ms);
 #endif
     if (network_scan_enabled) {
       network_scan(&wifi_scan_time, wifi_scan_polling_interval);
