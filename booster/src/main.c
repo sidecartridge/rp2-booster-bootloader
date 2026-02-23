@@ -183,12 +183,11 @@ int main() {
   //     // Start the HTTP server
   //     multicore_launch_core1(httpd_start);
 
-  absolute_time_t wifi_scan_time =
-      make_timeout_time_ms(5 * 1000);  // 3 seconds minimum for network scanning
   while (1) {
 #if PICO_CYW43_ARCH_POLL
     network_safe_poll();
-    cyw43_arch_wait_for_work_until(wifi_scan_time);
+    absolute_time_t wait_until = make_timeout_time_ms(1000);
+    cyw43_arch_wait_for_work_until(wait_until);
 #else
     sleep_ms(1000);
 #endif
