@@ -38,7 +38,7 @@
 // For Atari ST display
 #ifdef DISPLAY_ATARIST
 #define DISPLAY_MANAGER_BYPASS_MESSAGE \
-  "Press any SHIFT key to boot from GEMDOS. ESC for terminal."
+  "Press any SHIFT key to boot from GEMDOS. ESC for apps."
 #endif
 
 void display_mngr_start(const char *ssid, const char *url1, const char *url2);
@@ -48,5 +48,6 @@ void display_mngr_wifi_change_status(uint8_t wifi_status, const char *url1,
                                      const char *mac_str);
 void display_mngr_change_status(uint8_t status, const char *details);
 void display_mngr_refresh_connection_info();
+void display_mngr_redraw_current(void);
 
 #endif  // DISPLAY_MNGR_H

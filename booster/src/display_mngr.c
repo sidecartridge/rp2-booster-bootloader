@@ -224,6 +224,14 @@ void display_mngr_refresh_connection_info() {
   display_refresh();
 }
 
+void display_mngr_redraw_current(void) {
+  draw_connection_scr(
+      current_wifi_status, current_url1, current_url2,
+      current_status_has_details ? current_status_details : NULL,
+      current_mac[0] != '\0' ? current_mac : NULL);
+  display_refresh();
+}
+
 // The main function should be as follows:
 void display_mngr_start(const char *ssid, const char *url1, const char *url2) {
   size_t buffer_size = DISPLAY_BUFFER_SIZE;  // Safe usage

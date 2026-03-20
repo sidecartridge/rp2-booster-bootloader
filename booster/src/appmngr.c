@@ -1,5 +1,9 @@
 #include "appmngr.h"
 
+#include <ctype.h>
+#include <stdlib.h>
+#include <strings.h>
+
 #include "upgrader_firmware.h"
 
 // Create an enum for the type of download
@@ -267,6 +271,53 @@ static download_err_t set_app_info(const char *json_str) {
   DPRINTF("JSON: %s\n", app_info.json);
   DPRINTF("App info set successfully\n");
   return DOWNLOAD_OK;
+}
+
+static bool appmngr_parse_installed_app(
+    const char *json_str, const char *expected_uuid,
+    appmngr_installed_app_t *installed_app) {
+  cJSON *root = cJSON_Parse(json_str);
+  if (root == NULL) {
+    return false;
+  }
+
+  cJSON *uuid = cJSON_GetObjectItem(root, "uuid");
+  cJSON *name = cJSON_GetObjectItem(root, "name");
+  cJSON *version = cJSON_GetObjectItem(root, "version");
+
+  bool valid = false;
+  if (uuid && cJSON_IsString(uuid) && uuid->valuestring && name &&
+      cJSON_IsString(name) && name->valuestring &&
+      strcasecmp(uuid->valuestring, expected_uuid) == 0 &&
+      is_valid_uuid4(expected_uuid)) {
+    snprintf(installed_app->uuid, sizeof(installed_app->uuid), "%s",
+             expected_uuid);
+    snprintf(installed_app->name, sizeof(installed_app->name), "%s",
+             name->valuestring);
+    if (version && cJSON_IsString(version) && version->valuestring) {
+      snprintf(installed_app->version, sizeof(installed_app->version), "%s",
+               version->valuestring);
+    } else {
+      snprintf(installed_app->version, sizeof(installed_app->version), "%s",
+               "unknown");
+    }
+    valid = true;
+  }
+
+  cJSON_Delete(root);
+  return valid;
+}
+
+static int appmngr_compare_installed_apps(const void *lhs, const void *rhs) {
+  const appmngr_installed_app_t *left = lhs;
+  const appmngr_installed_app_t *right = rhs;
+
+  int cmp = strcasecmp(left->name, right->name);
+  if (cmp != 0) {
+    return cmp;
+  }
+
+  return strcmp(left->uuid, right->uuid);
 }
 
 download_err_t appmngr_save_app_info(const char *json_str) {
@@ -590,6 +641,90 @@ bool appmngr_fnext(char *json) {
   }
 
   return true;
+}
+
+uint16_t appmngr_get_installed_apps(appmngr_installed_app_t *apps,
+                                    uint16_t max_apps) {
+  if (apps == NULL || max_apps == 0) {
+    return 0;
+  }
+  if (!sdcard_info.ready) {
+    return 0;
+  }
+
+  char folder[256] = {0};
+  snprintf(folder, sizeof(folder), "%s",
+           settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value);
+
+  DIR dir;
+  FILINFO fno;
+  FRESULT res = f_opendir(&dir, folder);
+  if (res != FR_OK) {
+    DPRINTF("Error opening apps folder %s: %d\n", folder, res);
+    return 0;
+  }
+
+  uint16_t count = 0;
+  static char json_buf[MAXIMUM_APP_INFO_SIZE];
+  while (count < max_apps) {
+    res = f_readdir(&dir, &fno);
+    if (res != FR_OK || fno.fname[0] == '\0') {
+      break;
+    }
+    if (fno.fattrib & AM_DIR) {
+      continue;
+    }
+    if (strcmp(fno.fname, "apps.json") == 0) {
+      continue;
+    }
+
+    char *ext = strrchr(fno.fname, '.');
+    if (ext == NULL || strcasecmp(ext, ".json") != 0) {
+      continue;
+    }
+
+    char uuid[37] = {0};
+    size_t base_len = (size_t)(ext - fno.fname);
+    if (base_len != 36) {
+      continue;
+    }
+    snprintf(uuid, sizeof(uuid), "%.*s", (int)base_len, fno.fname);
+    if (!is_valid_uuid4(uuid)) {
+      continue;
+    }
+
+    char filepath[256] = {0};
+    snprintf(filepath, sizeof(filepath), "%s/%s", folder, fno.fname);
+
+    FIL fil;
+    UINT bytes_read = 0;
+    res = f_open(&fil, filepath, FA_READ);
+    if (res != FR_OK) {
+      DPRINTF("Error opening installed app json %s: %d\n", filepath, res);
+      continue;
+    }
+
+    res = f_read(&fil, json_buf, sizeof(json_buf) - 1, &bytes_read);
+    f_close(&fil);
+    if (res != FR_OK) {
+      DPRINTF("Error reading installed app json %s: %d\n", filepath, res);
+      continue;
+    }
+    json_buf[bytes_read] = '\0';
+
+    if (appmngr_parse_installed_app(json_buf, uuid, &apps[count])) {
+      count++;
+    }
+  }
+
+  f_closedir(&dir);
+
+  if (count > 1) {
+    qsort(apps, count, sizeof(appmngr_installed_app_t),
+          appmngr_compare_installed_apps);
+  }
+
+  return count;
 }
 
 download_status_t appmngr_get_download_status() { return download_status; }

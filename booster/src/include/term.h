@@ -70,19 +70,6 @@
 // Display command to enter the terminal mode and ignore other keys
 #define DISPLAY_COMMAND_TERM 0x3  // Enter terminal mode
 
-#define TPRINTF(fmt, ...)                                 \
-  do {                                                    \
-    char buffer[256];                                     \
-    snprintf(buffer, sizeof(buffer), fmt, ##__VA_ARGS__); \
-    term_print_string(buffer);                            \
-  } while (0)
-
-// Command lookup structure, now with argument support
-typedef struct {
-  const char *command;
-  void (*handler)(const char *arg);
-} Command;
-
 void __not_in_flash_func(term_dma_irq_handler_lookup)(void);
 
 void term_init(void);

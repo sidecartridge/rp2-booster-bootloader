@@ -43,6 +43,9 @@
 //   - 36 bytes for the UUID
 //   - 2 bytes for the sector (page number)
 #define LOOKUP_ENTRY_SIZE 38
+#define APPMNGR_MAX_INSTALLED_APPS (FLASH_SECTOR_SIZE / LOOKUP_ENTRY_SIZE)
+#define APPMNGR_INSTALLED_APP_NAME_LENGTH 64
+#define APPMNGR_INSTALLED_APP_VERSION_LENGTH 16
 
 typedef struct {
   char protocol[16];
@@ -75,6 +78,12 @@ typedef struct {
   char json[2048];
   uint8_t file_md5_digest[16];  // Result of algorithm
 } app_info_t;
+
+typedef struct {
+  char uuid[37];
+  char name[APPMNGR_INSTALLED_APP_NAME_LENGTH];
+  char version[APPMNGR_INSTALLED_APP_VERSION_LENGTH];
+} appmngr_installed_app_t;
 
 typedef enum {
   DOWNLOAD_STATUS_IDLE,
@@ -179,6 +188,8 @@ void appmngr_schedule_launch_app(const char *uuid);
 void appmngr_print_apps_lookup_table(uint8_t *table, uint16_t length);
 void appmngr_load_apps_lookup_table(uint8_t *table, uint16_t *length);
 int8_t appmngr_erase_app_lookup_table();
+uint16_t appmngr_get_installed_apps(appmngr_installed_app_t *apps,
+                                    uint16_t max_apps);
 
 bool appmngr_ffirst(char *json);
 bool appmngr_fnext(char *json);
