@@ -845,8 +845,28 @@ const char *network_getCyw43MacStr() {
     return cyw43MacStr;
   }
 
-  snprintf(cyw43MacStr, sizeof(cyw43MacStr),
-           "%02x:%02x:%02x:%02x:%02x:%02x", cyw43Mac[0], cyw43Mac[1],
-           cyw43Mac[2], cyw43Mac[3], cyw43Mac[4], cyw43Mac[5]);
+  snprintf(cyw43MacStr, sizeof(cyw43MacStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+           cyw43Mac[0], cyw43Mac[1], cyw43Mac[2], cyw43Mac[3], cyw43Mac[4],
+           cyw43Mac[5]);
   return cyw43MacStr;
+}
+
+bool network_getCurrentRssi(int32_t *rssi) {
+  if (rssi == NULL) {
+    return false;
+  }
+
+  *rssi = 0;
+  if (!cyw43Initialized || wifiCurrentMode != WIFI_MODE_STA) {
+    return false;
+  }
+
+  int res = cyw43_wifi_get_rssi(&cyw43_state, rssi);
+  if (res != 0) {
+    DPRINTF("Failed to get RSSI: %d\n", res);
+    *rssi = 0;
+    return false;
+  }
+
+  return *rssi != 0;
 }

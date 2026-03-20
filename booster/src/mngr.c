@@ -239,6 +239,8 @@ int mngr_init() {
       make_timeout_time_ms(10 * 1000);  // 10 seconds to show the screen
   absolute_time_t start_download_time =
       make_timeout_time_ms(86400 * 1000);  // 3 seconds to start the download
+  absolute_time_t wifi_signal_refresh_time =
+      make_timeout_time_ms(2 * 1000);  // 2 seconds to refresh RSSI on screen
   reboot_time = make_timeout_time_ms(0);
   factory_reset_time = make_timeout_time_ms(0);
   absolute_time_t launch_time = make_timeout_time_ms(0);
@@ -266,6 +268,12 @@ int mngr_init() {
 #endif
     if (network_scan_enabled) {
       network_scan(&wifi_scan_time, wifi_scan_polling_interval);
+    }
+    if (!term_isActive() &&
+        absolute_time_diff_us(get_absolute_time(), wifi_signal_refresh_time) <
+            0) {
+      display_mngr_refresh_connection_info();
+      wifi_signal_refresh_time = make_timeout_time_ms(2 * 1000);
     }
     if (bypass &&
         (absolute_time_diff_us(get_absolute_time(), show_screen_timeout) < 0)) {

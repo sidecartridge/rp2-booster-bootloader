@@ -10,6 +10,7 @@
 
 static TransmissionProtocol last_protocol;
 static bool last_protocol_valid = false;
+static bool term_active = false;
 
 static uint32_t memory_shared_address = 0;
 static uint32_t memory_random_token_address = 0;
@@ -103,7 +104,10 @@ void term_init(void) {
       rand();  // Generate a new random 32-bit value
   TPROTO_SET_RANDOM_TOKEN(memory_random_token_seed_address,
                           new_random_seed_token);
+  term_active = false;
 }
+
+bool term_isActive(void) { return term_active; }
 
 static char screen[TERM_SCREEN_SIZE];
 static uint8_t cursor_x = 0;
@@ -325,6 +329,7 @@ void __not_in_flash_func(term_loop)() {
     // Handle the command
     switch (last_protocol.command_id) {
       case APP_TERMINAL_START: {
+        term_active = true;
         display_term_start(40, 25);
         term_clear_screen();
         term_print_string("Type 'help' for available commands.\n");
@@ -398,6 +403,7 @@ void cmdClear(const char *arg) { term_clear_screen(); }
 
 void cmdExit(const char *arg) {
   term_print_string("Exiting terminal...\n");
+  term_active = false;
   // Send continue to desktop command
   SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_CONTINUE);
 }

@@ -47,5 +47,6 @@ void display_mngr_wifi_change_status(uint8_t wifi_status, const char *url1,
                                      const char *status_details,
                                      const char *mac_str);
 void display_mngr_change_status(uint8_t status, const char *details);
+void display_mngr_refresh_connection_info();
 
 #endif  // DISPLAY_MNGR_H
