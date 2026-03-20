@@ -67,7 +67,7 @@ static const char *display_mngr_signal_quality(int32_t rssi) {
   if (rssi >= -80) {
     return "Very weak";
   }
-  return "Almost unusable";
+  return "Unusable";
 }
 
 static void display_mngr_format_ssid_line(char *ssid_str, size_t ssid_str_size,
