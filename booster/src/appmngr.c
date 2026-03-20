@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <strings.h>
 
+#include "select.h"
 #include "upgrader_firmware.h"
 
 // Create an enum for the type of download
@@ -27,6 +28,14 @@ static char s_folder[256];
 static download_launch_err_t launch_status = DOWNLOAD_LAUNCHAPP_IDLE;
 static char launch_app_uuid[37] = {0};
 static bool download_update = false;
+
+static void appmngr_prepare_launch_runtime(void) {
+  // Stop the SELECT watcher core before any flash writes.
+  select_coreWaitPushDisable();
+
+  // Tear down Wi-Fi/LWIP so background activity cannot race the launch copy.
+  network_deInit();
+}
 
 void appmngr_set_download_update(bool update) { download_update = update; }
 
@@ -1628,6 +1637,9 @@ download_launch_err_t appmngr_launch_app() {
     DPRINTF("SD card not ready\n");
     return DOWNLOAD_LAUNCHAPP_SDCARDNOTREADY_ERROR;
   }
+
+  DPRINTF("Preparing runtime for app launch\n");
+  appmngr_prepare_launch_runtime();
 
   // Get the filename of the app info json
   char json_filename[256] = {0};
