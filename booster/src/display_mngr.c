@@ -46,13 +46,28 @@ static void display_mngr_draw_centered_text(const char *text, uint8_t y) {
 }
 
 static const char *display_mngr_signal_quality(int32_t rssi) {
+  if (rssi >= -30) {
+    return "Excellent";
+  }
+  if (rssi >= -40) {
+    return "Very good";
+  }
+  if (rssi >= -50) {
+    return "Good";
+  }
   if (rssi >= -60) {
-    return "Strong";
+    return "OK";
   }
-  if (rssi >= -75) {
-    return "Medium";
+  if (rssi >= -67) {
+    return "Fair";
   }
-  return "Low";
+  if (rssi >= -70) {
+    return "Weak";
+  }
+  if (rssi >= -80) {
+    return "Very weak";
+  }
+  return "Almost unusable";
 }
 
 static void display_mngr_format_ssid_line(char *ssid_str, size_t ssid_str_size,
