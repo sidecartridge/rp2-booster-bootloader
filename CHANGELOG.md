@@ -1,5 +1,31 @@
 # Changelog
 
+## v2.1.0 (2026-03-24) - release
+
+This release delivers a smoother overall user experience, with a cleaner Manager interface on both the Atari ST screen and the web UI, better behavior when WiFi is unavailable, fixes for some network issues in weak WiFi environments, and major flash-usage optimizations behind the scenes.
+
+### Changes
+- Reduced flash usage across Booster and the embedded Upgrader with targeted code-size optimizations, smaller display primitives, and streamlined helper code.
+- Minify the Manager web assets before generating `fsdata_srv.c`, and refactor repeated page content to reduce the embedded web payload size.
+- Add automatic flash usage reporting to the Booster build and stop the build if the generated image exceeds the available flash slot.
+- Accept `MinSizeRel` explicitly in the build scripts, and always build the Upgrader in `MinSizeRel` for `release` and `minsizerel` flows.
+
+### New features
+- Add an offline Manager mode: if WiFi connection retries are exhausted, Booster keeps running without network features and still allows manual boot of already-downloaded microfirmwares from the Atari ST terminal path.
+- Allow launching installed apps directly from the Atari ST terminal, including the ESC-to-apps and SHIFT-to-GEMDOS workflow for manual booting.
+- Show signal strength and MAC address information in both the Atari ST Manager screen and the shared system information panel in the web UI.
+- Re-enable ICMP ping replies for easier network diagnostics and compatibility checks.
+- Add responsive Platform and Features filters to the Apps page so users can narrow the available microfirmwares dynamically from the downloaded catalog.
+- Update the integrated Atari ST terminal firmware and embedded Upgrader image used by Booster.
+
+### Fixes
+- Improve SELECT-button debouncing for long presses so factory reset is more reliable.
+- Fix several WiFi stability issues, including reconnect memory pressure, polling behavior, multi-connection handling, and weaker-signal network environments.
+- Harden MD5 parsing for downloaded app metadata by validating the input length before converting it from JSON.
+- Polish Manager copy, status messaging, and minor header consistency issues found during PR review.
+
+---
+
 ## v2.0.9 (2025-12-20) - release
 
 This release now shows the MAC address to help users to configure their home router filters.
