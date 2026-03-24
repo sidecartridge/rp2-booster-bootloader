@@ -77,6 +77,15 @@ pico_sdk_init()
 
 # Create the fsdata.c file
 set(MAKE_FS_DATA_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/external/makefsdata)
+set(GENERATE_FS_DATA_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/external/generate_fsdata.pl)
+set(FSDATA_WORK_DIR ${CMAKE_CURRENT_BINARY_DIR}/fsdata_work)
+set(FLASH_USAGE_REPORT_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/report_flash_usage.cmake)
+set(BOOSTER_SIZE_TOOL ${CMAKE_SIZE_UTIL})
+if (NOT BOOSTER_SIZE_TOOL)
+    find_program(BOOSTER_SIZE_TOOL NAMES arm-none-eabi-size)
+endif()
+file(GLOB_RECURSE BOOSTER_FS_FILES LIST_DIRECTORIES false
+        ${CMAKE_CURRENT_LIST_DIR}/fs/*)
 
 # WARNING: I use a modified version of the makefsdata script to add text/css headers, not supported in the original tool
 if (NOT EXISTS ${MAKE_FS_DATA_SCRIPT})
@@ -86,15 +95,23 @@ if (NOT EXISTS ${MAKE_FS_DATA_SCRIPT})
                 )
 endif()
 
-message(STATUS "Running makefsdata script")
-execute_process(COMMAND
-        perl ${MAKE_FS_DATA_SCRIPT}
+add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_LIST_DIR}/fsdata_srv.c
+        COMMAND
+                perl ${GENERATE_FS_DATA_SCRIPT}
+                ${MAKE_FS_DATA_SCRIPT}
+                ${CMAKE_CURRENT_LIST_DIR}/fs
+                ${CMAKE_CURRENT_LIST_DIR}/fsdata_srv.c
+                ${FSDATA_WORK_DIR}
+        DEPENDS
+                ${GENERATE_FS_DATA_SCRIPT}
+                ${MAKE_FS_DATA_SCRIPT}
+                ${BOOSTER_FS_FILES}
         WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
-        ECHO_OUTPUT_VARIABLE
-        ECHO_ERROR_VARIABLE
-        )
-file(REMOVE ${CMAKE_CURRENT_LIST_DIR}/fsdata_srv.c)
-file(RENAME ${CMAKE_CURRENT_LIST_DIR}/fsdata.c ${CMAKE_CURRENT_LIST_DIR}/fsdata_srv.c)
+        COMMENT "Minifying web assets and generating fsdata_srv.c"
+        VERBATIM
+)
+add_custom_target(generate_booster_fsdata DEPENDS ${CMAKE_CURRENT_LIST_DIR}/fsdata_srv.c)
 
 # Add the settings library
 add_subdirectory(settings)
@@ -110,6 +127,7 @@ add_subdirectory(cjson)
 
 # Add HTTP client library
 add_subdirectory(httpc)
+add_dependencies(httpc generate_booster_fsdata)
 
 # Add MD5 library
 add_subdirectory(md5)
@@ -121,6 +139,7 @@ add_subdirectory($ENV{FATFS_SDK_PATH}/src build)
 add_executable(${PROJECT_NAME} 
         main.c
 )
+add_dependencies(${PROJECT_NAME} generate_booster_fsdata)
 
 pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/romemul.pio)
 
@@ -154,6 +173,21 @@ target_sources(${PROJECT_NAME} PRIVATE
 
 # Create map/bin/hex/uf2 files
 pico_add_extra_outputs(${PROJECT_NAME})
+
+if (BOOSTER_SIZE_TOOL)
+    add_custom_command(
+            TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND
+                    ${CMAKE_COMMAND}
+                    -DREPORT_ELF=$<TARGET_FILE:${PROJECT_NAME}>
+                    -DLINKER_SCRIPT=${CMAKE_CURRENT_LIST_DIR}/memmap_booster.ld
+                    -DSIZE_TOOL=${BOOSTER_SIZE_TOOL}
+                    -P ${FLASH_USAGE_REPORT_SCRIPT}
+            VERBATIM
+    )
+else()
+    message(WARNING "arm-none-eabi-size not found. Booster flash usage report disabled.")
+endif()
 
 # Link libraries required for the project
 target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -312,4 +346,3 @@ if(CMAKE_BUILD_TYPE STREQUAL "CustomBuild")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS_CUSTOMBUILD}")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS_CUSTOMBUILD}")
 endif()
-
