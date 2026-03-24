@@ -77,4 +77,4 @@ bool term_isActive(void);
 
 void __not_in_flash_func(term_loop)();
 
-#endif  // TERML_H
+#endif  // TERM_H
