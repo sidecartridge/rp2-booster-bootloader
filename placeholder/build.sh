@@ -51,12 +51,11 @@ echo "Board type: $BOARD_TYPE"
 export BUILD_TYPE=${2:-release}
 echo "Build type: $BUILD_TYPE"
 
-# If the build type is release, set DEBUG_MODE environment variable to 0
-# Otherwise set it to 1
-if [ "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" = "release" ]; then
-    export DEBUG_MODE=0
-else
+# Only explicit debug builds should enable DEBUG_MODE.
+if [ "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" = "debug" ]; then
     export DEBUG_MODE=1
+else
+    export DEBUG_MODE=0
 fi
 
 # Set the build directory. Delete previous contents if any
