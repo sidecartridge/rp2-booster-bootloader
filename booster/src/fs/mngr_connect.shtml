@@ -133,7 +133,7 @@
           <a href="/mngr_home.shtml" class="pure-menu-link">Apps</a>
         </li>
         <li class="pure-menu-item">
-          <a href="/mngr_network.shtml" class="pure-menu-link">Wifi</a>
+          <a href="/mngr_network.shtml" class="pure-menu-link">Network</a>
         </li>
         <li class="pure-menu-item">
           <a href="/mngr_config.shtml" class="pure-menu-link">Config</a>

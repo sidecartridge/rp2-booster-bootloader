@@ -14,6 +14,11 @@ target_link_libraries(httpc
     pico_stdlib    # Core Pico SDK library
     pico_cyw43_arch_lwip_threadsafe_background 
     pico_lwip_http
-    pico_lwip_mbedtls
-    pico_mbedtls
 )
+
+if(DEFINED ENV{BOOSTER_DOWNLOAD_HTTPS} AND "$ENV{BOOSTER_DOWNLOAD_HTTPS}" STREQUAL "1")
+    target_link_libraries(httpc
+        pico_lwip_mbedtls
+        pico_mbedtls
+    )
+endif()

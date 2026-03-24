@@ -9,16 +9,61 @@
 #include "constants.h"
 #include "debug.h"
 #include "gconfig.h"
+#include "hardware/flash.h"
+#include "hardware/sync.h"
 #include "sd_card.h"
 
 #define UF2_BLOCK_SIZE 512
+#define UPGRADE_FILENAME "upgrade.bin"
 
-enum {
-  SETTINGS_ADDRESS_OFFSET = 0x1FF000,
-  BUFFER_SIZE = 4096,
-  MAGIC_NUMBER = 0x1234,
-  VERSION_NUMBER = 0x0001
-};
+enum { BUFFER_SIZE = FLASH_BLOCK_SIZE };
+
+static uint8_t flash_write_buffer[BUFFER_SIZE] = {0};
+
+static size_t bounded_copy(char *dst, size_t dst_len, const char *src) {
+  size_t i = 0;
+
+  if (dst_len == 0) {
+    return 0;
+  }
+
+  while ((i + 1 < dst_len) && (src[i] != '\0')) {
+    dst[i] = src[i];
+    i++;
+  }
+  dst[i] = '\0';
+
+  return i;
+}
+
+static FRESULT build_upgrade_path(char *dst, size_t dst_len,
+                                  const char *apps_folder) {
+  const char suffix[] = UPGRADE_FILENAME;
+  size_t path_len = bounded_copy(dst, dst_len, apps_folder);
+  size_t suffix_idx = 0;
+
+  if ((path_len == 0) || (dst[path_len] != '\0')) {
+    return FR_INVALID_NAME;
+  }
+
+  if (dst[path_len - 1] != '/') {
+    if (path_len + 1 >= dst_len) {
+      return FR_INVALID_NAME;
+    }
+    dst[path_len++] = '/';
+    dst[path_len] = '\0';
+  }
+
+  while (suffix[suffix_idx] != '\0') {
+    if (path_len + 1 >= dst_len) {
+      return FR_INVALID_NAME;
+    }
+    dst[path_len++] = suffix[suffix_idx++];
+  }
+  dst[path_len] = '\0';
+
+  return FR_OK;
+}
 
 static inline void jump_to_booster_app() {
   // This code jumps to the Booster application at the top of the flash memory
@@ -46,7 +91,7 @@ static inline void jump_to_booster_app() {
   Before writing, it erases [flashAddress..(flashAddress + flashSize)).
 
   We no longer write one UF2 block at a time. Instead, we accumulate multiple
-  payloads from consecutive UF2 blocks into a dynamic buffer of size
+  payloads from consecutive UF2 blocks into a fixed RAM buffer of size
   'userPageSize' until that buffer is full or we run out of data.
   Then we flush that buffer to the flash.
 
@@ -66,15 +111,14 @@ static inline void jump_to_booster_app() {
     2) Open UF2 file.
     3) Erase [flashAddress..flashAddress+flashSize).
     4) Repeatedly read 512-byte UF2 blocks from file, parse out the payload,
-       and accumulate that payload in a dynamic buffer up to userPageSize.
+       and accumulate that payload in the shared RAM buffer up to userPageSize.
     5) Once the buffer is full (or no more data), write it to flash.
     6) If flash region remains but we have partial leftover data < userPageSize,
        do a final partial write.
 
   NOTE:
     - We do partial writes if leftover flash size is smaller than userPageSize.
-    - The user must ensure enough RAM is available to allocate userPageSize
-  bytes.
+    - The shared RAM buffer must be at least userPageSize bytes.
 */
 
 static inline FRESULT __not_in_flash_func(storeUF2FileToFlash)(
@@ -82,11 +126,11 @@ static inline FRESULT __not_in_flash_func(storeUF2FileToFlash)(
     uint32_t userPageSize) {
   FIL file;
   FRESULT res;
-  FSIZE_t uf2FileSize;
   UINT bytesRead;
 
   // Check page size
-  if (userPageSize == 0 || (userPageSize % FLASH_PAGE_SIZE) != 0) {
+  if (userPageSize == 0 || (userPageSize % FLASH_PAGE_SIZE) != 0 ||
+      (userPageSize > sizeof(flash_write_buffer))) {
     DPRINTF("Error: userPageSize (%u) is not a multiple of %u.\n", userPageSize,
             FLASH_PAGE_SIZE);
     return FR_INVALID_PARAMETER;
@@ -114,19 +158,8 @@ static inline FRESULT __not_in_flash_func(storeUF2FileToFlash)(
     restore_interrupts(ints);
   }
 
-  uf2FileSize = f_size(&file);
-  DPRINTF("UF2 file size: %u bytes\n", (unsigned int)uf2FileSize);
   DPRINTF("Erased %u bytes of flash at offset 0x%X\n", (unsigned int)flashSize,
           offset);
-
-  // We allocate a dynamic buffer of size userPageSize.
-  // We'll fill it with multiple UF2 block payloads.
-  uint8_t *accumBuf = (uint8_t *)malloc(userPageSize);
-  if (!accumBuf) {
-    DPRINTF("Error: Unable to allocate %u bytes for accumBuf.\n", userPageSize);
-    f_close(&file);
-    return FR_INT_ERR;
-  }
 
   // We'll keep track of how many bytes we have in accumBuf.
   uint32_t accumUsed = 0;
@@ -182,7 +215,7 @@ static inline FRESULT __not_in_flash_func(storeUF2FileToFlash)(
         uint32_t toCopy = (leftover < spaceInBuf) ? leftover : spaceInBuf;
 
         // Copy to the accumulation buffer.
-        memcpy(accumBuf + accumUsed, payload + payloadPos, toCopy);
+        memcpy(flash_write_buffer + accumUsed, payload + payloadPos, toCopy);
         accumUsed += toCopy;
         payloadPos += toCopy;
 
@@ -203,7 +236,7 @@ static inline FRESULT __not_in_flash_func(storeUF2FileToFlash)(
           // Program the flash with 'chunk' bytes.
           {
             uint32_t ints = save_and_disable_interrupts();
-            flash_range_program(currentOffset, accumBuf, chunk);
+            flash_range_program(currentOffset, flash_write_buffer, chunk);
             restore_interrupts(ints);
           }
 
@@ -237,14 +270,13 @@ static inline FRESULT __not_in_flash_func(storeUF2FileToFlash)(
       // Program partial.
       {
         uint32_t ints = save_and_disable_interrupts();
-        flash_range_program(currentOffset, accumBuf, chunk);
+        flash_range_program(currentOffset, flash_write_buffer, chunk);
         restore_interrupts(ints);
       }
       currentOffset += chunk;
     }
   }
 
-  free(accumBuf);
   f_close(&file);
 
   return FR_OK;
@@ -300,15 +332,18 @@ int main() {
 
   if (err < 0) {
     DPRINTF("Settings not initialized. Jump to Booster application\n");
-    // jump_to_booster_app();
+    jump_to_booster_app();
   }
 
   DPRINTF("Start the upgrade here\n");
 
   // Create the temporary name of the file downloaded
   char tmp_binary_filename[256] = {0};
-  snprintf(tmp_binary_filename, sizeof(tmp_binary_filename), "%s/upgrade.bin",
-           settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value);
+  if (build_upgrade_path(tmp_binary_filename, sizeof(tmp_binary_filename),
+                         gconfig_get_apps_folder()) != FR_OK) {
+    DPRINTF("Invalid upgrade filename path\n");
+    jump_to_booster_app();
+  }
 
   // We must initialize the FatFS file system
   FATFS fs;

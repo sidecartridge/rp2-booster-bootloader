@@ -27,17 +27,6 @@
       </div>
     </li>
 
-    <!-- Apps Catalog URL -->
-    <li class="system-item pure-u-1 pure-u-sm-1-2">
-      <div class="item-inner">
-        <div class="label-cell">
-          <i class="fas fa-link"></i>
-          <span>Apps catalog</span>
-        </div>
-        <div class="value-cell"><!--#APPSURL--></div>
-      </div>
-    </li>
-
     <!-- SSID -->
     <li class="system-item pure-u-1 pure-u-sm-1-2">
       <div class="item-inner">
@@ -49,14 +38,14 @@
       </div>
     </li>
 
-    <!-- IP Address -->
+    <!-- Signal Strength -->
     <li class="system-item pure-u-1 pure-u-sm-1-2">
       <div class="item-inner">
         <div class="label-cell">
-          <i class="fas fa-network-wired"></i>
-          <span>IP address</span>
+          <i class="fas fa-signal"></i>
+          <span>Signal strength</span>
         </div>
-        <div class="value-cell"><!--#IPADDR--></div>
+        <div class="value-cell"><!--#WSIGNAL--></div>
       </div>
     </li>
 
@@ -68,6 +57,17 @@
           <span>MAC address</span>
         </div>
         <div class="value-cell"><!--#MACADDR--></div>
+      </div>
+    </li>
+
+    <!-- IP Address -->
+    <li class="system-item pure-u-1 pure-u-sm-1-2">
+      <div class="item-inner">
+        <div class="label-cell">
+          <i class="fas fa-network-wired"></i>
+          <span>IP address</span>
+        </div>
+        <div class="value-cell"><!--#IPADDR--></div>
       </div>
     </li>
 

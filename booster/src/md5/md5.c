@@ -204,20 +204,3 @@
      memcpy(result, ctx.digest, 16);
  }
  
- void md5File(FILE *file, uint8_t *result){
-     char *input_buffer = malloc(1024);
-     size_t input_size = 0;
- 
-     MD5Context ctx;
-     md5Init(&ctx);
- 
-     while((input_size = fread(input_buffer, 1, 1024, file)) > 0){
-         md5Update(&ctx, (uint8_t *)input_buffer, input_size);
-     }
- 
-     md5Finalize(&ctx);
- 
-     free(input_buffer);
- 
-     memcpy(result, ctx.digest, 16);
- }

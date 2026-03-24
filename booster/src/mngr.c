@@ -15,19 +15,33 @@ static bool factory_reset = false;
 static absolute_time_t reboot_time = {0};
 static absolute_time_t factory_reset_time = {0};
 
+#define MNGR_OFFLINE_STATUS_MESSAGE "Offline mode. Network disabled."
+
 void mngr_enable_network_scan() { network_scan_enabled = true; }
 
 void mngr_disable_network_scan() { network_scan_enabled = false; }
 
 wifi_scan_data_t *mngr_get_networks() { return network_getFoundNetworks(); }
 
+static void mngr_enter_offline_mode(uint8_t wifi_status, const char *details,
+                                    const char *mac_str) {
+  const char *status_details =
+      (details != NULL) ? details : MNGR_OFFLINE_STATUS_MESSAGE;
+
+  DPRINTF("Entering manager offline mode: %s\n", status_details);
+  mngr_disable_network_scan();
+  network_deInit();
+  display_mngr_wifi_change_status(
+      wifi_status, NULL, NULL, status_details,
+      (mac_str != NULL && mac_str[0] != '\0') ? mac_str : NULL);
+  display_refresh();
+}
+
 int mngr_init() {
   // Initialize the network
   int err = network_initChipOnly();
   if (err != 0) {
     DPRINTF("Error initializing the network: %i\n", err);
-    blink_error();
-    return err;
   }
 
   // Initialize the SD card
@@ -100,73 +114,79 @@ int mngr_init() {
   display_mngr_start(ssid, url_host, url_ip);
 
   wifi_mode_t wifi_mode_value = WIFI_MODE_STA;
+  bool network_features_enabled = false;
+  char mac_str[64] = {0};
   err = network_wifiInit(wifi_mode_value);
   if (err != 0) {
     DPRINTF("Error initializing the network: %i\n", err);
-    blink_error();
-    return err;
-  }
-  const char *mac_str = network_getCyw43MacStr();
-  DPRINTF("MAC address: %s\n", mac_str);
-  display_mngr_wifi_change_status(0, NULL, NULL, NULL, mac_str);
-  display_refresh();
+    mngr_enter_offline_mode(DISPLAY_MNGR_WIFI_STATUS_RETRY_ERROR,
+                            MNGR_OFFLINE_STATUS_MESSAGE, NULL);
+  } else {
+    const char *network_mac = network_getCyw43MacStr();
+    snprintf(mac_str, sizeof(mac_str), "%s", network_mac ? network_mac : "");
+    DPRINTF("MAC address: %s\n", mac_str);
+    display_mngr_wifi_change_status(DISPLAY_MNGR_WIFI_STATUS_CONNECTING, NULL,
+                                    NULL, NULL,
+                                    mac_str[0] != '\0' ? mac_str : NULL);
+    display_refresh();
 
-  // Connect to the WiFi network
-  int numRetries = 3;
-  err = NETWORK_WIFI_STA_CONN_ERR_TIMEOUT;
-  while (err != NETWORK_WIFI_STA_CONN_OK) {
-    err = network_wifiStaConnect();
-    if (err < 0) {
-      DPRINTF("Error connecting to the WiFi network: %i\n", err);
-      DPRINTF("Number of retries left: %i\n", numRetries);
-      if (--numRetries <= 0) {
-        DPRINTF("Max retries reached. Exiting...\n");
-        display_mngr_wifi_change_status(2, NULL, NULL,
-                                        "Max retries reached. Exiting...",
-                                        mac_str);
-        display_refresh();
-        blink_error();
-        sleep_ms(1000);
-        return err;
-      } else {
+    // Connect to the WiFi network
+    int numRetries = 3;
+    err = NETWORK_WIFI_STA_CONN_ERR_TIMEOUT;
+    while (err != NETWORK_WIFI_STA_CONN_OK) {
+      err = network_wifiStaConnect();
+      if (err < 0) {
+        DPRINTF("Error connecting to the WiFi network: %i\n", err);
+        DPRINTF("Number of retries left: %i\n", numRetries);
+        if (--numRetries <= 0) {
+          DPRINTF("Max retries reached. Switching to offline mode.\n");
+          mngr_enter_offline_mode(DISPLAY_MNGR_WIFI_STATUS_OFFLINE,
+                                  MNGR_OFFLINE_STATUS_MESSAGE,
+                                  mac_str[0] != '\0' ? mac_str : NULL);
+          break;
+        }
+
         display_mngr_wifi_change_status(
-            2, NULL, NULL, network_WifiStaConnStatusString(err),
-            mac_str);  // Error
+            DISPLAY_MNGR_WIFI_STATUS_RETRY_ERROR, NULL, NULL,
+            network_WifiStaConnStatusString(err),
+            mac_str[0] != '\0' ? mac_str : NULL);
+        display_refresh();
+        sleep_ms(3000);  // Wait before retrying
+        display_mngr_wifi_change_status(DISPLAY_MNGR_WIFI_STATUS_CONNECTING,
+                                        NULL, NULL, NULL,
+                                        mac_str[0] != '\0' ? mac_str : NULL);
         display_refresh();
       }
-      sleep_ms(3000);  // Wait before retrying
-      display_mngr_wifi_change_status(0, NULL, NULL, NULL,
-                                      mac_str);  // Reset to connecting status
+    }
+
+    if (err == NETWORK_WIFI_STA_CONN_OK) {
+      network_features_enabled = true;
+      DPRINTF("WiFi connected\n");
+
+      ip4_addr_t ip = network_getCurrentIp();
+      DPRINTF("IP address: %s\n", ip4addr_ntoa(&ip));
+
+      snprintf(url_ip, sizeof(url_ip), "http://%s", ip4addr_ntoa(&ip));
+      version_loop();
+      download_version_t version_status = version_get_status();
+      if (version_status == DOWNLOAD_VERSION_COMPLETED) {
+        DPRINTF("Version download completed successfully\n");
+        if (version_isNewer()) {
+          DPRINTF("Downloaded version is newer than the built-in version\n");
+        } else {
+          DPRINTF(
+              "Downloaded version is not newer than the built-in version\n");
+        }
+      } else {
+        DPRINTF("Version download failed or in progress\n");
+      }
+
+      display_mngr_wifi_change_status(DISPLAY_MNGR_WIFI_STATUS_CONNECTED,
+                                      url_host, url_ip, NULL,
+                                      mac_str[0] != '\0' ? mac_str : NULL);
       display_refresh();
     }
   }
-  DPRINTF("WiFi connected\n");
-
-  // Disable the SELECT button
-  // select_coreWaitPushDisable();
-
-  // Enable the SELECT button again, but only to reset the BOOSTER
-  // select_coreWaitPush(reset_device);
-
-  ip4_addr_t ip = network_getCurrentIp();
-  DPRINTF("IP address: %s\n", ip4addr_ntoa(&ip));
-
-  snprintf(url_ip, sizeof(url_ip), "http://%s", ip4addr_ntoa(&ip));
-  version_loop();
-  download_version_t version_status = version_get_status();
-  if (version_status == DOWNLOAD_VERSION_COMPLETED) {
-    DPRINTF("Version download completed successfully\n");
-    if (version_isNewer()) {
-      DPRINTF("Downloaded version is newer than the built-in version\n");
-    } else {
-      DPRINTF("Downloaded version is not newer than the built-in version\n");
-    }
-  } else {
-    DPRINTF("Version download failed or in progress\n");
-  }
-
-  display_mngr_wifi_change_status(1, url_host, url_ip, NULL, mac_str);
-  display_refresh();
 
   // Init the download apps
   appmngr_init();
@@ -227,9 +247,11 @@ int mngr_init() {
     }
   }
 
-  // Start the HTTP server
-  mngr_httpd_start();
-  sleep_ms(500);
+  if (network_features_enabled) {
+    // Start the HTTP server
+    mngr_httpd_start();
+    sleep_ms(500);
+  }
 
   // appmngr_download_firmware_status(DOWNLOAD_STATUS_REQUESTED);
 
@@ -240,19 +262,38 @@ int mngr_init() {
       make_timeout_time_ms(10 * 1000);  // 10 seconds to show the screen
   absolute_time_t start_download_time =
       make_timeout_time_ms(86400 * 1000);  // 3 seconds to start the download
+  absolute_time_t wifi_signal_refresh_time =
+      make_timeout_time_ms(2 * 1000);  // 2 seconds to refresh RSSI on screen
   reboot_time = make_timeout_time_ms(0);
   factory_reset_time = make_timeout_time_ms(0);
   absolute_time_t launch_time = make_timeout_time_ms(0);
   bool bypass = true;
   while (1) {
+    int wait_ms = 10;
+    if (appmngr_get_download_status() == DOWNLOAD_STATUS_IN_PROGRESS ||
+        appmngr_get_download_firmware_status() == DOWNLOAD_STATUS_IN_PROGRESS ||
+        appmngr_get_launch_status() == DOWNLOAD_LAUNCHAPP_INPROGRESS ||
+        appmngr_get_launch_status() == DOWNLOAD_LAUNCHAPP_SCHEDULED) {
+      wait_ms = 1;
+    }
 #if PICO_CYW43_ARCH_POLL
-    network_safe_poll();
-    cyw43_arch_wait_for_work_until(10);
+    if (network_features_enabled) {
+      network_safe_poll();
+      cyw43_arch_wait_for_work_until(make_timeout_time_ms(wait_ms));
+    } else {
+      sleep_ms(wait_ms);
+    }
 #else
-    sleep_ms(10);
+    sleep_ms(wait_ms);
 #endif
-    if (network_scan_enabled) {
+    if (network_features_enabled && network_scan_enabled) {
       network_scan(&wifi_scan_time, wifi_scan_polling_interval);
+    }
+    if (network_features_enabled && !term_isActive() &&
+        absolute_time_diff_us(get_absolute_time(), wifi_signal_refresh_time) <
+            0) {
+      display_mngr_refresh_connection_info();
+      wifi_signal_refresh_time = make_timeout_time_ms(2 * 1000);
     }
     if (bypass &&
         (absolute_time_diff_us(get_absolute_time(), show_screen_timeout) < 0)) {
@@ -261,91 +302,97 @@ int mngr_init() {
       bypass = false;
     }
 
-    if (appmngr_get_download_status() == DOWNLOAD_STATUS_IN_PROGRESS ||
-        appmngr_get_download_firmware_status() == DOWNLOAD_STATUS_IN_PROGRESS) {
+    if (network_features_enabled &&
+        (appmngr_get_download_status() == DOWNLOAD_STATUS_IN_PROGRESS ||
+         appmngr_get_download_firmware_status() ==
+             DOWNLOAD_STATUS_IN_PROGRESS)) {
       appmngr_poll_download_app();
     }
 
-    switch (appmngr_get_download_status()) {
-      case DOWNLOAD_STATUS_REQUESTED: {
-        start_download_time =
-            make_timeout_time_ms(3 * 1000);  // 3 seconds to start the download
-        appmngr_download_status(DOWNLOAD_STATUS_NOT_STARTED);
-        break;
-      }
-      case DOWNLOAD_STATUS_NOT_STARTED: {
-        if ((absolute_time_diff_us(get_absolute_time(), start_download_time) <
-             0)) {
-          // Start the download. NULL means use info in app_info
-          err = appmngr_start_download(NULL);
-          if (err != DOWNLOAD_OK) {
-            DPRINTF("Error downloading app. Drive to error page.\n");
-          }
-        }
-        break;
-      }
-      case DOWNLOAD_STATUS_STARTED: {
-        if (appmngr_get_download_error() != DOWNLOAD_OK) {
-          DPRINTF("Error downloading app. Drive to error page.\n");
-          appmngr_confirm_failed_download_app();
-          appmngr_download_status(DOWNLOAD_STATUS_FAILED);
-        }
-        break;
-      }
-      case DOWNLOAD_STATUS_COMPLETED: {
-        // Save the app info to the SD card
-        download_err_t err = appmngr_finish_download_app();
-        appmngr_download_error(err);
-        if (err != DOWNLOAD_OK) {
-          DPRINTF("Error finishing download app\n");
-          appmngr_confirm_failed_download_app();
-          appmngr_download_status(DOWNLOAD_STATUS_FAILED);
+    if (network_features_enabled) {
+      switch (appmngr_get_download_status()) {
+        case DOWNLOAD_STATUS_REQUESTED: {
+          start_download_time = make_timeout_time_ms(
+              3 * 1000);  // 3 seconds to start the download
+          appmngr_download_status(DOWNLOAD_STATUS_NOT_STARTED);
           break;
         }
-        appmngr_confirm_download_app();
-        appmngr_download_status(DOWNLOAD_STATUS_IDLE);
-        break;
+        case DOWNLOAD_STATUS_NOT_STARTED: {
+          if ((absolute_time_diff_us(get_absolute_time(), start_download_time) <
+               0)) {
+            // Start the download. NULL means use info in app_info
+            err = appmngr_start_download(NULL);
+            if (err != DOWNLOAD_OK) {
+              DPRINTF("Error downloading app. Drive to error page.\n");
+            }
+          }
+          break;
+        }
+        case DOWNLOAD_STATUS_STARTED: {
+          if (appmngr_get_download_error() != DOWNLOAD_OK) {
+            DPRINTF("Error downloading app. Drive to error page.\n");
+            appmngr_confirm_failed_download_app();
+            appmngr_download_status(DOWNLOAD_STATUS_FAILED);
+          }
+          break;
+        }
+        case DOWNLOAD_STATUS_COMPLETED: {
+          // Save the app info to the SD card
+          download_err_t err = appmngr_finish_download_app();
+          appmngr_download_error(err);
+          if (err != DOWNLOAD_OK) {
+            DPRINTF("Error finishing download app\n");
+            appmngr_confirm_failed_download_app();
+            appmngr_download_status(DOWNLOAD_STATUS_FAILED);
+            break;
+          }
+          appmngr_confirm_download_app();
+          appmngr_download_status(DOWNLOAD_STATUS_IDLE);
+          break;
+        }
       }
     }
 
-    switch (appmngr_get_download_firmware_status()) {
-      case DOWNLOAD_STATUS_REQUESTED: {
-        start_download_time =
-            make_timeout_time_ms(3 * 1000);  // 3 seconds to start the download
-        appmngr_download_firmware_status(DOWNLOAD_STATUS_NOT_STARTED);
-        break;
-      }
-      case DOWNLOAD_STATUS_NOT_STARTED: {
-        if ((absolute_time_diff_us(get_absolute_time(), start_download_time) <
-             0)) {
-          // Start the download. NULL means use info in app_info
-          err = appmngr_start_download(FIRMWARE_BINARY_URL);
-          if (err != DOWNLOAD_OK) {
-            DPRINTF("Error downloading firmware. Drive to error page.\n");
+    if (network_features_enabled) {
+      switch (appmngr_get_download_firmware_status()) {
+        case DOWNLOAD_STATUS_REQUESTED: {
+          start_download_time = make_timeout_time_ms(
+              3 * 1000);  // 3 seconds to start the download
+          appmngr_download_firmware_status(DOWNLOAD_STATUS_NOT_STARTED);
+          break;
+        }
+        case DOWNLOAD_STATUS_NOT_STARTED: {
+          if ((absolute_time_diff_us(get_absolute_time(), start_download_time) <
+               0)) {
+            // Start the download. NULL means use info in app_info
+            err = appmngr_start_download(FIRMWARE_BINARY_URL);
+            if (err != DOWNLOAD_OK) {
+              DPRINTF("Error downloading firmware. Drive to error page.\n");
+            }
           }
+          break;
         }
-        break;
-      }
-      case DOWNLOAD_STATUS_STARTED: {
-        if (appmngr_get_download_firmware_error() != DOWNLOAD_OK) {
-          DPRINTF("Error downloading firmware. Drive to error page.\n");
-          appmngr_confirm_failed_download_firmware();
-          appmngr_download_firmware_status(DOWNLOAD_STATUS_FAILED);
-        } else {
-          display_mngr_change_status(5, NULL);  // Downloading firmware message
-          display_refresh();
-        }
+        case DOWNLOAD_STATUS_STARTED: {
+          if (appmngr_get_download_firmware_error() != DOWNLOAD_OK) {
+            DPRINTF("Error downloading firmware. Drive to error page.\n");
+            appmngr_confirm_failed_download_firmware();
+            appmngr_download_firmware_status(DOWNLOAD_STATUS_FAILED);
+          } else {
+            display_mngr_change_status(5, NULL);  // Downloading firmware message
+            display_refresh();
+          }
 
-        break;
-      }
-      case DOWNLOAD_STATUS_COMPLETED: {
-        // Save the app info to the SD card
-        appmngr_download_firmware_error(DOWNLOAD_OK);
-        appmngr_download_firmware_status(DOWNLOAD_STATUS_IDLE);
-        firmware_upgrade_state = FIRMWARE_UPGRADE_DOWNLOADED;
-        display_mngr_change_status(6, NULL);  // Upgrading firmware message
-        display_refresh();
-        break;
+          break;
+        }
+        case DOWNLOAD_STATUS_COMPLETED: {
+          // Save the app info to the SD card
+          appmngr_download_firmware_error(DOWNLOAD_OK);
+          appmngr_download_firmware_status(DOWNLOAD_STATUS_IDLE);
+          firmware_upgrade_state = FIRMWARE_UPGRADE_DOWNLOADED;
+          display_mngr_change_status(6, NULL);  // Upgrading firmware message
+          display_refresh();
+          break;
+        }
       }
     }
 

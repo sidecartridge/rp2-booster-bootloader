@@ -24,7 +24,6 @@
 #include "pico/multicore.h"
 
 #include "lwip/apps/httpd.h"
-#include "mbedtls/base64.h"
 
 typedef enum {
     MNGR_HTTPD_RESPONSE_OK = 200,

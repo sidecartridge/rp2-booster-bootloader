@@ -270,6 +270,27 @@ ip_addr_t network_getCurrentIp();
 const char* network_getCyw43MacStr();
 
 /**
+ * @brief Retrieves the current STA RSSI in dBm.
+ *
+ * Stores the current signal strength into `rssi` and returns true when the
+ * value is available.
+ *
+ * @param rssi Pointer to the output RSSI value in dBm.
+ * @return true when an RSSI value was obtained, false otherwise.
+ */
+bool network_getCurrentRssi(int32_t* rssi);
+
+/**
+ * @brief Returns a human-readable signal quality label for the given RSSI.
+ *
+ * The returned pointer refers to a static string literal.
+ *
+ * @param rssi RSSI value in dBm.
+ * @return Pointer to a null-terminated quality label.
+ */
+const char* network_getSignalQualityLabel(int32_t rssi);
+
+/**
  * @brief Parses and cleans up an SSID string.
  *
  * This function processes the input SSID and ensures it meets the required

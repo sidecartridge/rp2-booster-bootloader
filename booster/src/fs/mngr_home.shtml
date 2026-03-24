@@ -28,6 +28,10 @@
         apps: [],         // Remote apps
         local_apps: [],   // Local apps discovered via cgi
         installed_app: [],
+        machineFilters: [],
+        typeFilters: [],
+        selectedMachines: [],
+        selectedTypes: [],
         loaded_apps: false,
         showDeleteModal: false,
         showLaunchModal: false,
@@ -207,12 +211,111 @@
           console.log("Local apps:", this.local_apps);
 
           // Confirm that we're done
+          this.buildTaxonomyFilters();
           this.loaded_apps = true;
         },
 
         // Utility: check if an object has any keys
         isNonEmptyObject(obj) {
           return obj && typeof obj === "object" && Object.keys(obj).length > 0;
+        },
+
+        normalizeTaxonomyValues(value) {
+          if (Array.isArray(value)) {
+            return value
+              .filter((item) => typeof item === "string")
+              .map((item) => item.trim())
+              .filter((item) => item.length > 0);
+          }
+
+          if (typeof value === "string" && value.trim().length > 0) {
+            return [value.trim()];
+          }
+
+          return [];
+        },
+
+        getAppMachines(app) {
+          const machines = app && app.machines !== undefined && app.machines !== null
+            ? app.machines
+            : app && app.devices !== undefined
+              ? app.devices
+              : null;
+          return this.normalizeTaxonomyValues(machines);
+        },
+
+        getAppTypes(app) {
+          let types = null;
+
+          if (app && app.microfirmware_types !== undefined && app.microfirmware_types !== null) {
+            types = app.microfirmware_types;
+          } else if (app && app.microfirmware_type !== undefined && app.microfirmware_type !== null) {
+            types = app.microfirmware_type;
+          } else if (app && app.types !== undefined && app.types !== null) {
+            types = app.types;
+          } else if (app && app.tags !== undefined) {
+            types = app.tags;
+          }
+
+          return this.normalizeTaxonomyValues(types);
+        },
+
+        buildTaxonomyFilters() {
+          const buildOptions = (getter) => {
+            const counts = new Map();
+
+            this.apps.forEach((app) => {
+              getter(app).forEach((value) => {
+                counts.set(value, (counts.get(value) || 0) + 1);
+              });
+            });
+
+            return Array.from(counts.entries())
+              .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: "base" }))
+              .map(([value, count]) => ({ value, count }));
+          };
+
+          this.machineFilters = buildOptions((app) => this.getAppMachines(app));
+          this.typeFilters = buildOptions((app) => this.getAppTypes(app));
+        },
+
+        toggleSelection(target, value) {
+          const values = this[target];
+          const index = values.indexOf(value);
+
+          if (index >= 0) {
+            values.splice(index, 1);
+          } else {
+            values.push(value);
+          }
+        },
+
+        isSelected(target, value) {
+          return this[target].includes(value);
+        },
+
+        clearFilters() {
+          this.selectedMachines = [];
+          this.selectedTypes = [];
+        },
+
+        hasActiveFilters() {
+          return this.selectedMachines.length > 0 || this.selectedTypes.length > 0;
+        },
+
+        matchesSelectedFilters(app) {
+          const matchesMachines =
+            this.selectedMachines.length === 0 ||
+            this.getAppMachines(app).some((value) => this.selectedMachines.includes(value));
+          const matchesTypes =
+            this.selectedTypes.length === 0 ||
+            this.getAppTypes(app).some((value) => this.selectedTypes.includes(value));
+
+          return matchesMachines && matchesTypes;
+        },
+
+        filteredApps() {
+          return this.apps.filter((app) => this.matchesSelectedFilters(app));
         },
 
         // Download a remote app
@@ -337,13 +440,51 @@
     </div>
     <h2>Available Apps</h2>
     <p>
-      Below is the list of available micro-firmwares for your device. Click the DOWNLOAD button to download your chosen
-      app.
+      Browse the micro-firmwares available for your device. Use <strong>Download</strong> to install a new app, or
+      <strong>Update</strong> when a newer version is available.
     </p>
     <p>
-      To launch an app, simply click the LAUNCH button. To return to this page, click the SELECT button on the device
-      and follow the instructions in your computer
+      Use <strong>Launch</strong> to start an installed app. To return to this menu later, press the <strong>SELECT</strong>
+      button on the device and follow the instructions shown on your computer.
     </p>
+
+    <section class="filter-panel" x-show="loaded_apps" x-transition>
+      <div class="filter-groups">
+        <div class="filter-group" x-show="machineFilters.length > 0">
+          <span class="filter-group-title">Platform</span>
+          <div class="filter-chip-list">
+            <template x-for="machine in machineFilters" :key="machine.value">
+              <button type="button" class="filter-chip"
+                :class="{ 'filter-chip-active': isSelected('selectedMachines', machine.value) }"
+                @click="toggleSelection('selectedMachines', machine.value)">
+                <span x-text="machine.value"></span>
+                <span class="filter-chip-count" x-text="machine.count"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <div class="filter-group" x-show="typeFilters.length > 0">
+          <span class="filter-group-title">Features</span>
+          <div class="filter-chip-list">
+            <template x-for="type in typeFilters" :key="type.value">
+              <button type="button" class="filter-chip"
+                :class="{ 'filter-chip-active': isSelected('selectedTypes', type.value) }"
+                @click="toggleSelection('selectedTypes', type.value)">
+                <span x-text="type.value"></span>
+                <span class="filter-chip-count" x-text="type.count"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-actions" x-show="hasActiveFilters()">
+        <button class="filter-chip filter-chip-clear" type="button" @click="clearFilters()">
+          Clear Filters
+        </button>
+      </div>
+    </section>
 
     <!-- No SD card found. -->
     <div x-show="<!--#SDCARDB--> === false" class="banner banner-error">
@@ -403,8 +544,12 @@
 
 
     <section class="app-list pure-g" x-show="loaded_apps" x-transition>
+      <div class="banner banner-info filter-empty-state" x-show="loaded_apps && filteredApps().length === 0">
+        <i class="fas fa-info-circle banner-icon"></i>
+        <span>No apps match the selected filters.</span>
+      </div>
       <!-- Loop through apps -->
-      <template x-for="app in apps" :key="app.uuid">
+      <template x-for="app in filteredApps()" :key="`${app.uuid}-${app.version}-${app.binary || app.name}`">
         <div class="app-row pure-g" :class="{ 'update-available': app.update }">
 
           <!-- Left-hand side: App Image (1/6 on md) -->
@@ -426,13 +571,13 @@
             <div class="tags-row">
               <!-- App Tags -->
               <ul class="app-tags">
-                <template x-for="tag in app.tags" :key="tag">
+                <template x-for="tag in getAppTypes(app)" :key="tag">
                   <li x-text="tag"></li>
                 </template>
               </ul>
               <!-- Device Tags -->
               <ul class="device-tags">
-                <template x-for="device in app.devices" :key="device">
+                <template x-for="device in getAppMachines(app)" :key="device">
                   <li x-text="device"></li>
                 </template>
               </ul>
@@ -523,114 +668,11 @@
 
   </main>
 
-  <!-- System panel in-page -->
-  <!-- System Section -->
-  <section class="system-section pure-g">
-    <div class="pure-u-1">
-      <h2>System info</h2>
-    </div>
+  <div x-data x-init="fetch('/system.shtml').then(r=>r.text()).then(h=>$el.outerHTML=h)"></div>
 
-    <ul class="system-list pure-g">
-      <!-- SD Card Free Space -->
-      <li class="system-item pure-u-1 pure-u-sm-1-2">
-        <div class="item-inner">
-          <div class="label-cell">
-            <i class="fas fa-sd-card"></i>
-            <span>SD Card</span>
-          </div>
-          <div class="value-cell"><!--#SDCARDST--></div>
-        </div>
-      </li>
-
-      <!-- Apps Folder -->
-      <li class="system-item pure-u-1 pure-u-sm-1-2">
-        <div class="item-inner">
-          <div class="label-cell">
-            <i class="fas fa-folder-plus"></i>
-            <span>Apps folder</span>
-          </div>
-          <div class="value-cell"><!--#APPSFLDR--></div>
-        </div>
-      </li>
-
-      <!-- SSID -->
-      <li class="system-item pure-u-1 pure-u-sm-1-2">
-        <div class="item-inner">
-          <div class="label-cell">
-            <i class="fas fa-wifi"></i>
-            <span>SSID</span>
-          </div>
-          <div class="value-cell"><!--#SSID--></div>
-        </div>
-      </li>
-
-      <!-- IP Address -->
-      <li class="system-item pure-u-1 pure-u-sm-1-2">
-        <div class="item-inner">
-          <div class="label-cell">
-            <i class="fas fa-network-wired"></i>
-            <span>IP address</span>
-          </div>
-          <div class="value-cell"><!--#IPADDR--></div>
-        </div>
-      </li>
-
-      <!-- MAC Address -->
-      <li class="system-item pure-u-1 pure-u-sm-1-2">
-        <div class="item-inner">
-          <div class="label-cell">
-            <i class="fas fa-id-badge"></i>
-            <span>MAC address</span>
-          </div>
-          <div class="value-cell"><!--#MACADDR--></div>
-        </div>
-      </li>
-
-    </ul>
-  </section>
-
-
-  <!-- System panel client-side -->
-  <!--
-  <div
-    id="system-include"
-    class="pure-u-1"
-    x-data
-    x-init="
-      const fetchSystemPanel = () => {
-        fetch('/system.shtml')
-          .then(res => res.text())
-          .then(html => $el.innerHTML = html)
-          .catch(err => console.error('Error fetching system panel:', err));
-      };
-
-      // Execute immediately at time 0
-      fetchSystemPanel();
-
-      // Then execute every 10 seconds
-      setInterval(fetchSystemPanel, 10000);
-    "
-  ></div>
-  -->
-
-  <!-- Footer information in-page -->
   <footer class="footer">
     <p>&copy; 2025 GOODDATA LABS SLU. All rights reserved.</p>
   </footer>
-
-  <!-- Footer loaded client-side  -->
-  <!--
-  <div
-    id="footer-include" 
-    class="pure-u-1"
-    x-data
-    x-init="
-      fetch('/footer.inc')
-        .then(res => res.text())
-        .then(html => $el.innerHTML = html)
-    "
-  ></div>
-  -->
 </body>
 
 </html>

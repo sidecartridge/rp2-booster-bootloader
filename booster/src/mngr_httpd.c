@@ -20,6 +20,100 @@ static wifi_scan_data_t *networks = NULL;
 static mngr_httpd_response_status_t response_status = MNGR_HTTPD_RESPONSE_OK;
 static char httpd_response_message[128] = {0};
 
+static int mngr_httpd_base64_value(unsigned char c) {
+  if (c >= 'A' && c <= 'Z') {
+    return c - 'A';
+  }
+  if (c >= 'a' && c <= 'z') {
+    return 26 + (c - 'a');
+  }
+  if (c >= '0' && c <= '9') {
+    return 52 + (c - '0');
+  }
+  if (c == '+') {
+    return 62;
+  }
+  if (c == '/') {
+    return 63;
+  }
+  if (c == '=') {
+    return -2;
+  }
+  return -1;
+}
+
+static int mngr_httpd_base64_decode(unsigned char *dest, size_t dest_size,
+                                    size_t *decoded_len,
+                                    const unsigned char *src,
+                                    size_t src_len) {
+  size_t out = 0;
+  int quad[4];
+  size_t quad_len = 0;
+
+  for (size_t i = 0; i < src_len; ++i) {
+    unsigned char c = src[i];
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      continue;
+    }
+
+    int value = mngr_httpd_base64_value(c);
+    if (value < -1) {
+      quad[quad_len++] = value;
+    } else if (value >= 0) {
+      quad[quad_len++] = value;
+    } else {
+      return -1;
+    }
+
+    if (quad_len != 4) {
+      continue;
+    }
+
+    if (quad[0] < 0 || quad[1] < 0) {
+      return -1;
+    }
+    if (out >= dest_size) {
+      return -2;
+    }
+    dest[out++] = (unsigned char)((quad[0] << 2) | (quad[1] >> 4));
+
+    if (quad[2] == -2) {
+      if (quad[3] != -2) {
+        return -1;
+      }
+      quad_len = 0;
+      break;
+    }
+    if (quad[2] < 0) {
+      return -1;
+    }
+    if (out >= dest_size) {
+      return -2;
+    }
+    dest[out++] = (unsigned char)(((quad[1] & 0x0F) << 4) | (quad[2] >> 2));
+
+    if (quad[3] == -2) {
+      quad_len = 0;
+      break;
+    }
+    if (quad[3] < 0) {
+      return -1;
+    }
+    if (out >= dest_size) {
+      return -2;
+    }
+    dest[out++] = (unsigned char)(((quad[2] & 0x03) << 6) | quad[3]);
+    quad_len = 0;
+  }
+
+  if (quad_len != 0) {
+    return -1;
+  }
+
+  *decoded_len = out;
+  return 0;
+}
+
 /**
  * @brief Check if the string starts with specified characters
  * (case-insensitive).
@@ -129,6 +223,7 @@ static const char *ssi_tags[] = {
     "WPWR",      // 47 - WiFi Power
     "WRSS",      // 48 - WiFi RSSI
     "MACADDR",   // 49 - Device MAC address
+    "WSIGNAL",   // 50 - Live WiFi signal strength
 };
 
 /**
@@ -182,11 +277,9 @@ const char *cgi_download(int iIndex, int iNumParams, char *pcParam[],
       int ret;
       size_t len = 0;
       char output_buffer[4096];
-      ret = mbedtls_base64_decode(output_buffer,          // destination
-                                  sizeof(output_buffer),  // dest size
-                                  &len,  // number of bytes decoded
-                                  (const unsigned char *)pcValue[i],
-                                  strlen(pcValue[i]));
+      ret = mngr_httpd_base64_decode(
+          (unsigned char *)output_buffer, sizeof(output_buffer) - 1, &len,
+          (const unsigned char *)pcValue[i], strlen(pcValue[i]));
       // Place a null terminator at the end of the string
       output_buffer[len] = '\0';
       if (ret != 0) {
@@ -232,10 +325,8 @@ const char *cgi_saveparams(int iIndex, int iNumParams, char *pcParam[],
       int ret;
       size_t len = 0;
       char output_buffer[4096];
-      ret = mbedtls_base64_decode(
-          (unsigned char *)output_buffer,  // destination
-          sizeof(output_buffer),           // dest size
-          &len,                            // number of bytes decoded
+      ret = mngr_httpd_base64_decode(
+          (unsigned char *)output_buffer, sizeof(output_buffer) - 1, &len,
           (const unsigned char *)pcValue[i], strlen(pcValue[i]));
       // Place a null terminator at the end of the string
       output_buffer[len] = '\0';
@@ -929,6 +1020,17 @@ static u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen
     {
       const char *mac = network_getCyw43MacStr();
       printed = snprintf(pcInsert, iInsertLen, "%s", mac != NULL ? mac : "");
+      break;
+    }
+    case 50: /* WSIGNAL */
+    {
+      int32_t rssi = 0;
+      if (network_getCurrentRssi(&rssi)) {
+        printed = snprintf(pcInsert, iInsertLen, "%" PRId32 " dBm (%s)", rssi,
+                           network_getSignalQualityLabel(rssi));
+      } else {
+        printed = snprintf(pcInsert, iInsertLen, "N/A");
+      }
       break;
     }
     default: /* unknown tag */

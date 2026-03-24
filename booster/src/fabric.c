@@ -227,7 +227,7 @@ void fabric_loop() {
   while (!fabric_config.is_set) {
 #if PICO_CYW43_ARCH_POLL
     network_safe_poll();
-    cyw43_arch_wait_for_work_until(10);
+    cyw43_arch_wait_for_work_until(make_timeout_time_ms(10));
 #else
     sleep_ms(10);
 #endif
@@ -243,7 +243,8 @@ void fabric_loop() {
   while (network_scanIsActive()) {
 #if PICO_CYW43_ARCH_POLL
     network_safe_poll();
-    cyw43_arch_wait_for_work_until(wifi_scan_time);
+    cyw43_arch_wait_for_work_until(
+        make_timeout_time_ms(wait_poll_interval_ms));
 #else
     sleep_ms(wait_poll_interval_ms);
 #endif
@@ -256,7 +257,8 @@ void fabric_loop() {
   while (wait_for_reboot--) {
 #if PICO_CYW43_ARCH_POLL
     network_safe_poll();
-    cyw43_arch_wait_for_work_until(wifi_scan_time);
+    cyw43_arch_wait_for_work_until(
+        make_timeout_time_ms(wait_poll_interval_ms));
 #else
     sleep_ms(wait_poll_interval_ms);
 #endif

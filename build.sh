@@ -22,7 +22,18 @@ echo "Board type: $BOARD_TYPE"
 # Set the release or debug build type
 # If nothing passed as second argument, use release
 export BUILD_TYPE=${2:-release}
+if [ "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" = "minsizerel" ]; then
+    export BUILD_TYPE=MinSizeRel
+fi
 echo "Build type: $BUILD_TYPE"
+
+export UPGRADER_BUILD_TYPE=$BUILD_TYPE
+case "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" in
+    release|minsizerel)
+        export UPGRADER_BUILD_TYPE=MinSizeRel
+        ;;
+esac
+echo "Upgrader build type: $UPGRADER_BUILD_TYPE"
 
 # Set the build directory. Delete previous contents if any
 echo "Delete previous build directory"
@@ -32,7 +43,7 @@ mkdir build
 # Build the upgrader
 echo "Building upgrader project"
 cd upgrader
-./build.sh pico MinSizeRel
+./build.sh pico $UPGRADER_BUILD_TYPE
 cd ..
 
 # Build the term
@@ -98,4 +109,3 @@ fi
 echo "Done"
 
 exit 0
-
