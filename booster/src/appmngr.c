@@ -29,6 +29,48 @@ static download_launch_err_t launch_status = DOWNLOAD_LAUNCHAPP_IDLE;
 static char launch_app_uuid[37] = {0};
 static bool download_update = false;
 
+static int appmngr_hex_nibble(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  c = (char)tolower((unsigned char)c);
+  if (c >= 'a' && c <= 'f') {
+    return 10 + (c - 'a');
+  }
+  return -1;
+}
+
+static bool appmngr_parse_md5_hex(const char *md5_str, uint8_t *out_md5) {
+  for (int i = 0; i < 16; ++i) {
+    int high = appmngr_hex_nibble(md5_str[i * 2]);
+    int low = appmngr_hex_nibble(md5_str[i * 2 + 1]);
+    if (high < 0 || low < 0) {
+      return false;
+    }
+    out_md5[i] = (uint8_t)((high << 4) | low);
+  }
+  return true;
+}
+
+#if defined(_DEBUG) && (_DEBUG != 0)
+static void appmngr_debug_log_md5(const char *label, const uint8_t *digest,
+                                  size_t digest_len) {
+  char digest_hex[(2 * 16) + 1];
+
+  if (digest_len > 16) {
+    digest_len = 16;
+  }
+
+  for (size_t i = 0; i < digest_len; ++i) {
+    sprintf(&digest_hex[i * 2], "%02X", digest[i]);
+  }
+  digest_hex[digest_len * 2] = '\0';
+  DPRINTF("%s: %s\n", label, digest_hex);
+}
+#else
+#define appmngr_debug_log_md5(label, digest, digest_len) ((void)0)
+#endif
+
 static void appmngr_prepare_launch_runtime(void) {
   // Stop the SELECT watcher core before any flash writes.
   select_coreWaitPushDisable();
@@ -229,14 +271,10 @@ static download_err_t set_app_info(const char *json_str) {
       cJSON_Delete(root);
       return DOWNLOAD_PARSEMD5_ERROR;
     }
-    for (int i = 0; i < 16; i++) {
-      unsigned int byte;
-      if (sscanf(md5_str + (i * 2), "%2x", &byte) != 1) {
-        DPRINTF("Error parsing MD5 hex at index %d\n", i);
-        cJSON_Delete(root);
-        return DOWNLOAD_PARSEMD5_ERROR;
-      }
-      app_info.md5[i] = (unsigned char)byte;
+    if (!appmngr_parse_md5_hex(md5_str, app_info.md5)) {
+      DPRINTF("Error parsing MD5 hex string\n");
+      cJSON_Delete(root);
+      return DOWNLOAD_PARSEMD5_ERROR;
     }
   } else {
     DPRINTF("MD5 field is missing or is not a valid string\n");
@@ -269,13 +307,7 @@ static download_err_t set_app_info(const char *json_str) {
     DPRINTF("+- %s\n", app_info.devices[i]);
   }
   DPRINTF("Binary: %s\n", app_info.binary);
-  char app_md5_str[2 * sizeof(app_info.md5) + 1];
-  for (int i = 0; i < sizeof(app_info.md5); i++) {
-    sprintf(&app_md5_str[i * 2], "%02X", app_info.md5[i]);
-  }
-  app_md5_str[2 * sizeof(app_info.md5)] = '\0';
-  DPRINTF("MD5: %s\n", app_md5_str);
-
+  appmngr_debug_log_md5("MD5", app_info.md5, sizeof(app_info.md5));
   DPRINTF("Version: %s\n", app_info.version);
   DPRINTF("JSON: %s\n", app_info.json);
   DPRINTF("App info set successfully\n");
@@ -327,6 +359,22 @@ static int appmngr_compare_installed_apps(const void *lhs, const void *rhs) {
   }
 
   return strcmp(left->uuid, right->uuid);
+}
+
+static void appmngr_sort_installed_apps(appmngr_installed_app_t *apps,
+                                        uint16_t count) {
+  for (uint16_t i = 1; i < count; ++i) {
+    appmngr_installed_app_t current = apps[i];
+    uint16_t j = i;
+
+    while (j > 0 &&
+           appmngr_compare_installed_apps(&apps[j - 1], &current) > 0) {
+      apps[j] = apps[j - 1];
+      --j;
+    }
+
+    apps[j] = current;
+  }
 }
 
 download_err_t appmngr_save_app_info(const char *json_str) {
@@ -729,8 +777,7 @@ uint16_t appmngr_get_installed_apps(appmngr_installed_app_t *apps,
   f_closedir(&dir);
 
   if (count > 1) {
-    qsort(apps, count, sizeof(appmngr_installed_app_t),
-          appmngr_compare_installed_apps);
+    appmngr_sort_installed_apps(apps, count);
   }
 
   return count;
@@ -1880,14 +1927,8 @@ download_err_t appmngr_finish_download_app() {
   }
   DPRINTF("App binary downloaded\n");
 
-  // Debugging lines of strange compiling errors in Linux
-  // Remove when figure out what is going on
-  char app_md5_str[2 * sizeof(app_info.md5) + 1];
-  for (int i = 0; i < sizeof(app_info.md5); i++) {
-    sprintf(&app_md5_str[i * 2], "%02X", app_info.md5[i]);
-  }
-  app_md5_str[2 * sizeof(app_info.md5)] = '\0';
-  DPRINTF("MD5 hash of app info: %s\n", app_md5_str);
+  appmngr_debug_log_md5("MD5 hash of app info", app_info.md5,
+                        sizeof(app_info.md5));
 
   MD5Context md5_ctx;
   download_err_t md5_ret = calculate_md5_of_tmp_file(&md5_ctx);
@@ -1896,31 +1937,16 @@ download_err_t appmngr_finish_download_app() {
     return md5_ret;
   }
 
-  // Debugging lines of strange compiling errors in Linux
-  // Remove when figure out what is going on
-  memset(app_md5_str, 0, sizeof(app_md5_str));
-  for (int i = 0; i < sizeof(app_info.md5); i++) {
-    sprintf(&app_md5_str[i * 2], "%02X", app_info.md5[i]);
-  }
-  app_md5_str[2 * sizeof(app_info.md5)] = '\0';
-  DPRINTF("MD5 hash of app info: %s\n", app_md5_str);
+  appmngr_debug_log_md5("MD5 hash of app info", app_info.md5,
+                        sizeof(app_info.md5));
 
   memcpy(app_info.file_md5_digest, md5_ctx.digest,
          sizeof(app_info.file_md5_digest));
-  char file_md5_str[2 * sizeof(app_info.file_md5_digest) + 1];
-
-  for (int i = 0; i < sizeof(app_info.file_md5_digest); i++) {
-    sprintf(&file_md5_str[i * 2], "%02X", app_info.file_md5_digest[i]);
-  }
-  file_md5_str[2 * sizeof(app_info.file_md5_digest)] = '\0';
-  DPRINTF("MD5 hash of downloaded file: %s\n", file_md5_str);
-
-  memset(app_md5_str, 0, sizeof(app_md5_str));
-  for (int i = 0; i < sizeof(app_info.md5); i++) {
-    sprintf(&app_md5_str[i * 2], "%02X", app_info.md5[i]);
-  }
-  app_md5_str[2 * sizeof(app_info.md5)] = '\0';
-  DPRINTF("MD5 hash of app info: %s\n", app_md5_str);
+  appmngr_debug_log_md5("MD5 hash of downloaded file",
+                        app_info.file_md5_digest,
+                        sizeof(app_info.file_md5_digest));
+  appmngr_debug_log_md5("MD5 hash of app info", app_info.md5,
+                        sizeof(app_info.md5));
 
   // Compare the MD5 hash with the one in the app info
   if (memcmp(app_info.md5, app_info.file_md5_digest, sizeof(app_info.md5)) !=

@@ -66,6 +66,21 @@ static const char *picoSerialStr() {
   return buf;
 }
 
+static char *network_trim_ascii_spaces(char *text) {
+  while (*text == ' ' || *text == '\t') {
+    ++text;
+  }
+
+  size_t len = strlen(text);
+  while (len > 0 &&
+         (text[len - 1] == ' ' || text[len - 1] == '\t' ||
+          text[len - 1] == '\r' || text[len - 1] == '\n')) {
+    text[--len] = '\0';
+  }
+
+  return text;
+}
+
 static uint32_t getCountryCode(char *code, char **validCountryStr) {
   *validCountryStr = "XX";
   // empty configuration select worldwide
@@ -686,33 +701,32 @@ wifi_sta_conn_process_status_t network_wifiStaConnect() {
     if (entry == NULL || entry->value == NULL) {
       DPRINTF("Error: DNS configuration is missing.\n");
     } else {
-      char *dns = entry->value;
-      char *dnsCopy = strdup(
-          dns);  // Make a copy of the string to avoid modifying the original
-      if (dnsCopy == NULL) {
-        DPRINTF("Error: Memory allocation failed.\n");
+      char dns_copy[(NETWORK_MAX_STRING_LENGTH * 2) + 2] = {0};
+      snprintf(dns_copy, sizeof(dns_copy), "%s", entry->value);
+
+      char *dns1 = network_trim_ascii_spaces(dns_copy);
+      char *dns2 = strchr(dns1, ',');
+      if (dns2 != NULL) {
+        *dns2++ = '\0';
+        dns2 = network_trim_ascii_spaces(dns2);
+      }
+
+      ip_addr_t dns1Ip;
+      ip_addr_t dns2Ip;
+      if (dns1[0] == '\0' || (dns1Ip.addr = ipaddr_addr(dns1)) == IPADDR_NONE) {
+        DPRINTF("Error: Invalid DNS1 address.\n");
       } else {
-        char *dns1 = strtok(dnsCopy, ",");
-        char *dns2 = strtok(NULL, ",");
+        dns_setserver(0, &dns1Ip);
+        DPRINTF("DNS1: %s\n", ipaddr_ntoa(&dns1Ip));
 
-        ip_addr_t dns1Ip;
-        ip_addr_t dns2Ip;
-        if (dns1 == NULL || (dns1Ip.addr = ipaddr_addr(dns1)) == IPADDR_NONE) {
-          DPRINTF("Error: Invalid DNS1 address.\n");
-        } else {
-          dns_setserver(0, &dns1Ip);
-          DPRINTF("DNS1: %s\n", ipaddr_ntoa(&dns1Ip));
-
-          if (dns2 != NULL) {
-            if ((dns2Ip.addr = ipaddr_addr(dns2)) == IPADDR_NONE) {
-              DPRINTF("Error: Invalid DNS2 address.\n");
-            } else {
-              dns_setserver(1, &dns2Ip);
-              DPRINTF("DNS2: %s\n", ipaddr_ntoa(&dns2Ip));
-            }
+        if (dns2 != NULL && dns2[0] != '\0') {
+          if ((dns2Ip.addr = ipaddr_addr(dns2)) == IPADDR_NONE) {
+            DPRINTF("Error: Invalid DNS2 address.\n");
+          } else {
+            dns_setserver(1, &dns2Ip);
+            DPRINTF("DNS2: %s\n", ipaddr_ntoa(&dns2Ip));
           }
         }
-        free(dnsCopy);  // Free the copied string after use
       }
     }
   }
@@ -739,12 +753,14 @@ wifi_sta_conn_process_status_t network_wifiStaConnect() {
     DPRINTF("No auth mode found in config. Can't connect\n");
     return NETWORK_WIFI_STA_CONN_ERR_NO_AUTH_MODE;
   }
-  char *passwordValue = NULL;
+  char passwordValueBuf[MAX_PASSWORD_LENGTH] = {0};
+  const char *passwordValue = NULL;
   SettingsConfigEntry *password =
       settings_find_entry(gconfig_getContext(), PARAM_WIFI_PASSWORD);
   if (password != NULL && password->value != NULL &&
       strlen(password->value) > 0) {
-    passwordValue = strdup(password->value);
+    snprintf(passwordValueBuf, sizeof(passwordValueBuf), "%s", password->value);
+    passwordValue = passwordValueBuf;
   } else {
     DPRINTF(
         "No password found in config. Trying to connect without password\n");
@@ -758,7 +774,6 @@ wifi_sta_conn_process_status_t network_wifiStaConnect() {
           passwordValue != NULL ? passwordValue : "<null>", authValue);
   errorCode =
       cyw43_arch_wifi_connect_async(ssid->value, passwordValue, authValue);
-  free(passwordValue);
   if (errorCode != 0) {
     DPRINTF("Failed to connect to WiFi: %d\n", errorCode);
     return NETWORK_WIFI_STA_CONN_ERR_CONNECTION_FAILED;
