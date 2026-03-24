@@ -26,7 +26,12 @@
 #define DISPLAY_MNGR_QR_SCALE 5
 
 #define DISPLAY_MNGR_SELECT_RESET_MESSAGE \
-  "If can't connect to your WiFi, press SELECT for 10 seconds to restart."
+  "Hold SELECT over 10s to restore WiFi factory defaults."
+
+#define DISPLAY_MNGR_WIFI_STATUS_CONNECTING 0
+#define DISPLAY_MNGR_WIFI_STATUS_CONNECTED 1
+#define DISPLAY_MNGR_WIFI_STATUS_RETRY_ERROR 2
+#define DISPLAY_MNGR_WIFI_STATUS_OFFLINE 3
 
 #define DISPLAY_MNGR_EMPTY_MESSAGE                                             \
   "                                                                          " \

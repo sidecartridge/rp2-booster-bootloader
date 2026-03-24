@@ -71,7 +71,7 @@ static void display_mngr_draw_connection_info(uint8_t wifi_status) {
   char ssid_str[128] = {0};
   char signal_suffix[32] = {0};
 
-  if (wifi_status == 1) {
+  if (wifi_status == DISPLAY_MNGR_WIFI_STATUS_CONNECTED) {
     int32_t rssi = 0;
     if (network_getCurrentRssi(&rssi)) {
       const char *quality = network_getSignalQualityLabel(rssi);
@@ -90,8 +90,10 @@ static void draw_connection_scr(uint8_t wifi_status, const char *url1,
                                 const char *mac_str) {
   u8g2_ClearBuffer(display_get_u8g2_ref());
 
-  display_draw_qr(qrcode_url, DISPLAY_WIDTH, DISPLAY_HEIGHT, 0, 0,
-                  DISPLAY_QR_BORDER, DISPLAY_MNGR_QR_SCALE);
+  if (wifi_status != DISPLAY_MNGR_WIFI_STATUS_OFFLINE) {
+    display_draw_qr(qrcode_url, DISPLAY_WIDTH, DISPLAY_HEIGHT, 0, 0,
+                    DISPLAY_QR_BORDER, DISPLAY_MNGR_QR_SCALE);
+  }
   display_mngr_clear_connection_info_line();
   display_mngr_draw_connection_info(wifi_status);
   display_mngr_draw_status(current_status, status_details);
@@ -103,7 +105,7 @@ static void draw_connection_scr(uint8_t wifi_status, const char *url1,
     display_mngr_draw_centered_text(mac_line, 8);
   }
 
-  if (wifi_status == 1) {
+  if (wifi_status == DISPLAY_MNGR_WIFI_STATUS_CONNECTED) {
     u8g2_SetDrawColor(display_get_u8g2_ref(), 0);
     u8g2_DrawBox(display_get_u8g2_ref(), 0, DISPLAY_HEIGHT - 24, DISPLAY_WIDTH,
                  8);
@@ -116,7 +118,7 @@ static void draw_connection_scr(uint8_t wifi_status, const char *url1,
     display_mngr_draw_centered_text(url_str, 19);
   }
 
-  if (wifi_status == 2) {
+  if (wifi_status == DISPLAY_MNGR_WIFI_STATUS_OFFLINE) {
     u8g2_SetFont(display_get_u8g2_ref(), u8g2_font_squeezed_b7_tr);
     display_mngr_draw_centered_text(DISPLAY_MNGR_SELECT_RESET_MESSAGE,
                                     DISPLAY_HEIGHT - 17);
@@ -141,9 +143,14 @@ static void display_mngr_draw_status(uint8_t status, const char *details) {
     case 1:
       snprintf(status_str, sizeof(status_str), "      Connected!     ");
       break;
-    case 2:
+    case DISPLAY_MNGR_WIFI_STATUS_RETRY_ERROR:
       snprintf(status_str, sizeof(status_str),
                details != NULL ? details : "   Connection Error! ");
+      break;
+    case DISPLAY_MNGR_WIFI_STATUS_OFFLINE:
+      snprintf(status_str, sizeof(status_str),
+               details != NULL ? details : "Offline mode. Network disabled.");
+      break;
     case 5:
       snprintf(status_str, sizeof(status_str),
                details != NULL ? details : "Downloading firmware ");
@@ -205,7 +212,7 @@ void display_mngr_wifi_change_status(uint8_t wifi_status, const char *url1,
 }
 
 void display_mngr_refresh_connection_info() {
-  if (current_wifi_status != 1) {
+  if (current_wifi_status != DISPLAY_MNGR_WIFI_STATUS_CONNECTED) {
     return;
   }
 
