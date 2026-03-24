@@ -61,7 +61,7 @@ void draw_connection_step1_scr(const uint8_t qrcode_wifi[], const char *ssid,
                DISPLAY_HEIGHT - 8, DISPLAY_BYPASS_MESSAGE);
 
   // Frames
-  u8g2_DrawRFrame(display_get_u8g2_ref(), 0, 16, 156, 168, 8);
+  u8g2_DrawFrame(display_get_u8g2_ref(), 0, 16, 156, 168);
 }
 
 // Draw graphics into the buffer
@@ -87,7 +87,7 @@ void draw_connection_step2_scr(const uint8_t qrcode_url[], const char *url1,
       DISPLAY_CONNECTION_STEP2_MSG);
 
   // Frames
-  u8g2_DrawRFrame(display_get_u8g2_ref(), 164, 16, 156, 168, 8);
+  u8g2_DrawFrame(display_get_u8g2_ref(), 164, 16, 156, 168);
 }
 
 void draw_reset_scr() {
