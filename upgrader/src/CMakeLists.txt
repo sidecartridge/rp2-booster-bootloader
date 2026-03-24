@@ -62,24 +62,58 @@ set(CMAKE_C_STANDARD 11)
 # Creates a pico-sdk subdirectory in our project for the libraries
 pico_sdk_init()
 
-add_subdirectory(settings)
-
 # Tell CMake where to find other source code
 add_subdirectory($ENV{FATFS_SDK_PATH}/src build)
   
-# Tell CMake where to find the executable source file
-add_executable(${PROJECT_NAME} 
-        main.c
+# Build a minimal FatFs/SD stack for the upgrader only.
+set(FATFS_SDK_SRC_DIR $ENV{FATFS_SDK_PATH}/src)
+
+add_library(upgrader_fatfs STATIC
+    ${FATFS_SDK_SRC_DIR}/ff15/source/ff.c
+    ${FATFS_SDK_SRC_DIR}/ff15/source/ffunicode.c
+    ${FATFS_SDK_SRC_DIR}/sd_driver/dma_interrupts.c
+    ${FATFS_SDK_SRC_DIR}/sd_driver/sd_timeouts.c
+    ${FATFS_SDK_SRC_DIR}/sd_driver/SPI/my_spi.c
+    ${FATFS_SDK_SRC_DIR}/sd_driver/SPI/sd_card_spi.c
+    ${FATFS_SDK_SRC_DIR}/sd_driver/SPI/sd_spi.c
+    ${FATFS_SDK_SRC_DIR}/src/crc.c
+    ${FATFS_SDK_SRC_DIR}/src/glue.c
+    fatfs_sd_card.c
+    my_debug.c
 )
 
-target_sources(${PROJECT_NAME} PRIVATE 
-                    gconfig.c
-                    hw_config.c)
+target_compile_definitions(upgrader_fatfs PUBLIC
+    PICO_MAX_SHARED_IRQ_HANDLERS=8u
+)
 
-# Ensure local and FatFS headers are visible to all target sources
+target_include_directories(upgrader_fatfs PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}/include
+    ${FATFS_SDK_SRC_DIR}/ff15/source
+    ${FATFS_SDK_SRC_DIR}/sd_driver
+    ${FATFS_SDK_SRC_DIR}/include
+)
+
+target_link_libraries(upgrader_fatfs PUBLIC
+    hardware_dma
+    hardware_pio
+    hardware_spi
+    pico_stdlib
+    cmsis_core
+)
+
+# Tell CMake where to find the executable source file
+add_executable(${PROJECT_NAME}
+    main.c
+)
+
+target_sources(${PROJECT_NAME} PRIVATE
+    gconfig.c
+    hw_config.c
+)
+
+# Ensure local headers are visible to all target sources
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/include
-    $ENV{FATFS_SDK_PATH}/src/include
 )
 
 # Create map/bin/hex/uf2 files
@@ -88,8 +122,7 @@ pico_add_extra_outputs(${PROJECT_NAME})
 # Link to pico_stdlib (gpio, time, etc. functions)
 # Base libraries
 set(LINK_LIBRARIES
-    no-OS-FatFS-SD-SDIO-SPI-RPi-Pico                # FATFS library   
-    settings                 # Custom settings library
+    upgrader_fatfs
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LINK_LIBRARIES}
@@ -135,18 +168,14 @@ if (NOT DEFINED _DEBUG)
         set(_DEBUG 0)
 endif()
 
-# Debug outputs
-pico_enable_stdio_usb(${PROJECT_NAME} 0)
-# Workaround to disable USB output in release builds
 if(${_DEBUG} STREQUAL "0")
-    pico_enable_stdio_uart(${PROJECT_NAME} 0)
-    pico_enable_stdio_usb(${PROJECT_NAME} 0)
     target_link_options(${PROJECT_NAME} PRIVATE
     "-Wl,--gc-sections"
     "-Wl,--strip-all"
     )
 
 else()
+    target_link_libraries(${PROJECT_NAME} PRIVATE pico_stdlib)
     pico_enable_stdio_uart(${PROJECT_NAME} 1)
     pico_enable_stdio_usb(${PROJECT_NAME} 0)
 endif()

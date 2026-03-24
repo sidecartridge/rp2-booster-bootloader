@@ -1,101 +1,139 @@
-#include "include/gconfig.h"
+#include "gconfig.h"
 
-static SettingsConfigEntry defaultEntries[] = {
-    {PARAM_APPS_FOLDER, SETTINGS_TYPE_STRING, "/apps"},
-    {PARAM_APPS_CATALOG_URL, SETTINGS_TYPE_STRING,
-     "http://atarist.sidecartridge.com/apps.json"},
-    {PARAM_BOOT_FEATURE, SETTINGS_TYPE_STRING, "FABRIC"},
-    {PARAM_HOSTNAME, SETTINGS_TYPE_STRING, "sidecart"},
-    {PARAM_SAFE_CONFIG_REBOOT, SETTINGS_TYPE_BOOL, "true"},
-    {PARAM_SD_BAUD_RATE_KB, SETTINGS_TYPE_INT, "12500"},
-    {PARAM_WIFI_AUTH, SETTINGS_TYPE_INT, "0"},
-    {PARAM_WIFI_CONNECT_TIMEOUT, SETTINGS_TYPE_INT, "30"},
-    {PARAM_WIFI_COUNTRY, SETTINGS_TYPE_STRING, "XX"},
-    {PARAM_WIFI_DHCP, SETTINGS_TYPE_BOOL, "true"},
-    {PARAM_WIFI_DNS, SETTINGS_TYPE_STRING, "8.8.8.8"},
-    {PARAM_WIFI_GATEWAY, SETTINGS_TYPE_STRING, ""},
-    {PARAM_WIFI_IP, SETTINGS_TYPE_STRING, ""},
-    {PARAM_WIFI_MODE, SETTINGS_TYPE_INT, "0"},
-    {PARAM_WIFI_NETMASK, SETTINGS_TYPE_STRING, ""},
-    {PARAM_WIFI_PASSWORD, SETTINGS_TYPE_STRING, ""},
-    {PARAM_WIFI_POWER, SETTINGS_TYPE_INT, "0"},
-    {PARAM_WIFI_RSSI, SETTINGS_TYPE_BOOL, "true"},
-    {PARAM_WIFI_SCAN_SECONDS, SETTINGS_TYPE_INT, "10"},
-    {PARAM_WIFI_SSID, SETTINGS_TYPE_STRING, ""}};
+#include <stddef.h>
+
+#include "constants.h"
+#include "debug.h"
 
 enum {
-  CONFIG_BUFFER_SIZE = 4096,
-  CONFIG_MAGIC_NUMBER = 0x1234,
-  CONFIG_VERSION_NUMBER = 0x0001
+  GCONFIG_FLASH_SIZE = 4096,
+  GCONFIG_KEY_LENGTH = 30,
+  GCONFIG_VALUE_LENGTH = 96
 };
 
-// Create a global context for our settings
-static SettingsContext gSettingsCtx;
+#define GCONFIG_DEFAULT_APPS_FOLDER "/apps"
+#define GCONFIG_MAGIC_VERSION_KEY "MAGICVERSION"
+#define GCONFIG_MAGIC_VERSION_VALUE "305397761"
 
-/**
- * @brief Initializes the global configuration settings.
- *
- * This function initializes the global configuration settings using the
- * provided default entries. If the settings are not initialized, it initializes
- * them with the default values. If a current application name is provided, it
- * checks if the current application matches the one in the settings.
- *
- * @param current_app_name The name of the current application. If NULL, the
- * function will ignore the application name check.
- * @return int Returns GCONFIG_SUCCESS on success, GCONFIG_INIT_ERROR if there
- * is an error initializing the settings, or GCONFIG_MISMATCHED_APP if the
- * current application does not match the one in the settings.
- */
+typedef enum {
+  SETTINGS_TYPE_INT = 0,
+  SETTINGS_TYPE_STRING = 1,
+  SETTINGS_TYPE_BOOL = 2
+} SettingsDataType;
+
+typedef struct {
+  char key[GCONFIG_KEY_LENGTH];
+  SettingsDataType dataType;
+  char value[GCONFIG_VALUE_LENGTH];
+} SettingsConfigEntry;
+
+_Static_assert(sizeof(SettingsDataType) == 1, "Unexpected settings enum size");
+_Static_assert(offsetof(SettingsConfigEntry, dataType) == GCONFIG_KEY_LENGTH,
+               "Unexpected settings key layout");
+_Static_assert(offsetof(SettingsConfigEntry, value) ==
+                   GCONFIG_KEY_LENGTH + sizeof(SettingsDataType),
+               "Unexpected settings value layout");
+
+static char g_apps_folder[GCONFIG_VALUE_LENGTH] = GCONFIG_DEFAULT_APPS_FOLDER;
+
+static int field_equals(const char *field, size_t field_len,
+                        const char *expected) {
+  size_t i = 0;
+
+  while ((i < field_len) && (expected[i] != '\0')) {
+    if (field[i] != expected[i]) {
+      return 0;
+    }
+    i++;
+  }
+
+  return (i < field_len) && (field[i] == '\0') && (expected[i] == '\0');
+}
+
+static int is_valid_key(const char *key) {
+  size_t i = 0;
+
+  while (i < GCONFIG_KEY_LENGTH) {
+    const char chr = key[i];
+
+    if (chr == '\0') {
+      return i > 0;
+    }
+    if (((chr < 'A') || (chr > 'Z')) && ((chr < '0') || (chr > '9')) &&
+        (chr != '_')) {
+      return 0;
+    }
+    i++;
+  }
+
+  return 0;
+}
+
+static size_t copy_field(char *dst, size_t dst_len, const char *src,
+                         size_t src_len) {
+  size_t i = 0;
+
+  if (dst_len == 0) {
+    return 0;
+  }
+
+  while ((i + 1 < dst_len) && (i < src_len) && (src[i] != '\0')) {
+    dst[i] = src[i];
+    i++;
+  }
+  dst[i] = '\0';
+
+  return i;
+}
+
 int gconfig_init(const char *currentAppName) {
-  DPRINTF("Initializing settings\n");
-  int err = settings_init(&gSettingsCtx, defaultEntries,
-                          sizeof(defaultEntries) / sizeof(defaultEntries[0]),
-                          (unsigned int)&_global_config_flash_start - XIP_BASE,
-                          CONFIG_BUFFER_SIZE, CONFIG_MAGIC_NUMBER,
-                          CONFIG_VERSION_NUMBER);
+  const SettingsConfigEntry *entries =
+      (const SettingsConfigEntry *)&_global_config_flash_start;
+  const size_t max_entries = GCONFIG_FLASH_SIZE / sizeof(SettingsConfigEntry);
+  size_t i = 0;
+  int boot_feature_match = (currentAppName == NULL);
 
-  // If the settings are not initialized, then we must initialize them with the
-  // default values in the Booster application
-  if (err < 0) {
-    DPRINTF("Error initializing settings.\n");
+  copy_field(g_apps_folder, sizeof(g_apps_folder), GCONFIG_DEFAULT_APPS_FOLDER,
+             sizeof(GCONFIG_DEFAULT_APPS_FOLDER));
+
+  if (max_entries == 0) {
     return GCONFIG_INIT_ERROR;
   }
 
-  // If the current app as argument is not null, check if the current app is the
-  // same as the one in the settings Otherwise, ignore and continue
-  if (currentAppName != NULL) {
-    // If we are here, it means that the settings were initialized correctly
-    // We now must read the flash address of the configuration settings of the
-    // current application
-    SettingsConfigEntry *entry =
-        settings_find_entry(&gSettingsCtx, PARAM_BOOT_FEATURE);
-    if ((entry == NULL) || (entry->value == NULL) ||
-        (strcmp(currentAppName, entry->value) != 0)) {
-      // If the entry is found but the content is empty, or not equal to the
-      // current app name then go to the Booster application
-      DPRINTF(
-          "The current app (%s) is not the same as the one in the settings "
-          "(%s)\n",
-          currentAppName, entry->value);
-      return GCONFIG_MISMATCHED_APP;
-    }
-  } else {
-    DPRINTF("The current app is not provided as argument. Booster app?\n");
+  if (!field_equals(entries[0].key, sizeof(entries[0].key),
+                    GCONFIG_MAGIC_VERSION_KEY) ||
+      !field_equals(entries[0].value, sizeof(entries[0].value),
+                    GCONFIG_MAGIC_VERSION_VALUE)) {
+    DPRINTF("Global config magic/version mismatch\n");
+    return GCONFIG_INIT_ERROR;
   }
 
-  DPRINTF("Settings loaded.\n");
+  for (i = 1; i < max_entries; i++) {
+    const SettingsConfigEntry *entry = &entries[i];
 
-  settings_print(&gSettingsCtx, NULL);
+    if (entry->key[0] == '\0') {
+      break;
+    }
+    if (!is_valid_key(entry->key)) {
+      break;
+    }
 
-  return GCONFIG_SUCCESS;
+    if (field_equals(entry->key, sizeof(entry->key), PARAM_APPS_FOLDER)) {
+      if (entry->value[0] != '\0') {
+        copy_field(g_apps_folder, sizeof(g_apps_folder), entry->value,
+                   sizeof(entry->value));
+      }
+      continue;
+    }
+
+    if ((currentAppName != NULL) &&
+        field_equals(entry->key, sizeof(entry->key), PARAM_BOOT_FEATURE)) {
+      boot_feature_match =
+          field_equals(entry->value, sizeof(entry->value), currentAppName);
+    }
+  }
+
+  return boot_feature_match ? GCONFIG_SUCCESS : GCONFIG_MISMATCHED_APP;
 }
 
-/**
- * @brief Returns a pointer to the global settings context.
- *
- * This function allows other parts of the application to retrieve a pointer
- * to the global settings context at any time.
- *
- * @return SettingsContext* Pointer to the global settings context.
- */
-SettingsContext *gconfig_getContext(void) { return &gSettingsCtx; }
+const char *gconfig_get_apps_folder(void) { return g_apps_folder; }

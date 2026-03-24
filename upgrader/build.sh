@@ -60,6 +60,11 @@ echo "Board type: $BOARD_TYPE"
 # Set the release or debug build type
 # If nothing passed as second argument, use release
 export BUILD_TYPE=${2:-release}
+case "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" in
+    release|minsizerel)
+        export BUILD_TYPE=MinSizeRel
+        ;;
+esac
 echo "Build type: $BUILD_TYPE"
 
 # If and only if the build type is debug, enable DEBUG_MODE
