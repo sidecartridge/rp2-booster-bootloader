@@ -943,3 +943,28 @@ bool network_getCurrentRssi(int32_t *rssi) {
 
   return *rssi != 0;
 }
+
+const char *network_getSignalQualityLabel(int32_t rssi) {
+  if (rssi >= -30) {
+    return "Excellent";
+  }
+  if (rssi >= -40) {
+    return "Very good";
+  }
+  if (rssi >= -50) {
+    return "Good";
+  }
+  if (rssi >= -60) {
+    return "OK";
+  }
+  if (rssi >= -67) {
+    return "Fair";
+  }
+  if (rssi >= -70) {
+    return "Weak";
+  }
+  if (rssi >= -80) {
+    return "Very weak";
+  }
+  return "Unusable";
+}

@@ -45,31 +45,6 @@ static void display_mngr_draw_centered_text(const char *text, uint8_t y) {
   u8g2_DrawStr(display_get_u8g2_ref(), x, y, text);
 }
 
-static const char *display_mngr_signal_quality(int32_t rssi) {
-  if (rssi >= -30) {
-    return "Excellent";
-  }
-  if (rssi >= -40) {
-    return "Very good";
-  }
-  if (rssi >= -50) {
-    return "Good";
-  }
-  if (rssi >= -60) {
-    return "OK";
-  }
-  if (rssi >= -67) {
-    return "Fair";
-  }
-  if (rssi >= -70) {
-    return "Weak";
-  }
-  if (rssi >= -80) {
-    return "Very weak";
-  }
-  return "Unusable";
-}
-
 static void display_mngr_format_ssid_line(char *ssid_str, size_t ssid_str_size,
                                           const char *signal_suffix) {
   size_t visible_ssid_len = strlen(current_ssid);
@@ -99,7 +74,7 @@ static void display_mngr_draw_connection_info(uint8_t wifi_status) {
   if (wifi_status == 1) {
     int32_t rssi = 0;
     if (network_getCurrentRssi(&rssi)) {
-      const char *quality = display_mngr_signal_quality(rssi);
+      const char *quality = network_getSignalQualityLabel(rssi);
       snprintf(signal_suffix, sizeof(signal_suffix), " (%" PRId32 " dBm, %s)",
                rssi, quality);
     }

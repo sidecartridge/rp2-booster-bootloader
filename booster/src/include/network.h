@@ -281,6 +281,16 @@ const char* network_getCyw43MacStr();
 bool network_getCurrentRssi(int32_t* rssi);
 
 /**
+ * @brief Returns a human-readable signal quality label for the given RSSI.
+ *
+ * The returned pointer refers to a static string literal.
+ *
+ * @param rssi RSSI value in dBm.
+ * @return Pointer to a null-terminated quality label.
+ */
+const char* network_getSignalQualityLabel(int32_t rssi);
+
+/**
  * @brief Parses and cleans up an SSID string.
  *
  * This function processes the input SSID and ensures it meets the required

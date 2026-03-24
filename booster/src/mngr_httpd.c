@@ -223,6 +223,7 @@ static const char *ssi_tags[] = {
     "WPWR",      // 47 - WiFi Power
     "WRSS",      // 48 - WiFi RSSI
     "MACADDR",   // 49 - Device MAC address
+    "WSIGNAL",   // 50 - Live WiFi signal strength
 };
 
 /**
@@ -1019,6 +1020,17 @@ static u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen
     {
       const char *mac = network_getCyw43MacStr();
       printed = snprintf(pcInsert, iInsertLen, "%s", mac != NULL ? mac : "");
+      break;
+    }
+    case 50: /* WSIGNAL */
+    {
+      int32_t rssi = 0;
+      if (network_getCurrentRssi(&rssi)) {
+        printed = snprintf(pcInsert, iInsertLen, "%" PRId32 " dBm (%s)", rssi,
+                           network_getSignalQualityLabel(rssi));
+      } else {
+        printed = snprintf(pcInsert, iInsertLen, "N/A");
+      }
       break;
     }
     default: /* unknown tag */
