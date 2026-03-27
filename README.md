@@ -3,21 +3,33 @@
 ![Discord](https://img.shields.io/discord/1160868666162823218?style=flat&label=Discord&link=https%3A%2F%2Fdiscord.com%2Finvite%2Fu73QP9MEYC)
 
 
-This is an advanced second-stage bootloader for the Raspberry Pi Pico W and the SidecarTridge Multidevice board. The current version is designed for the RP2040-based Pico W, but future releases will support the RP235x series and move beyond the Atari ST architecture.  
+This is an advanced second-stage bootloader for the Raspberry Pi Pico W and the SidecarTridge Multidevice board. The current 2.1.x series targets the RP2040-based Pico W and focuses on a web-based Manager, Atari ST terminal integration, OTA updates, and resilient offline-safe boot flows.  
 
 ## Key Features  
 
 - **OTA (Over-The-Air) Updates**  
   The Booster app fetches and installs the latest apps or microfirmwares from a web server, making it easy to manage and update multiple solutions on a single device.  
 
-- **Web-Based Interface**  
+- **Web-Based Manager**  
   Access and manage the device via a web browser. The interface simplifies app installation, updates, and system configuration without the need for additional software.  
 
 - **Micro SD Card Support**  
   Store and manage files on a micro SD card, allowing apps to use external storage or turn the device into a file server.  
 
-- **Mass Storage Mode**  
-  The device can function as a USB mass storage device for easy file transfers.  
+- **Catalog Filters in the Apps View**  
+  Narrow the public app catalog dynamically with Platform and Features filters so it is easier to find the right microfirmware.  
+
+- **Offline-Capable Manager**  
+  If Booster cannot connect to the configured WiFi network after its retry cycle, it stays usable in offline mode so already-downloaded microfirmwares can still be launched from the Atari ST terminal path.  
+
+- **Atari ST Terminal Integration**  
+  Use the Atari ST display as the main terminal, inspect connection details directly on screen, and launch installed apps from the keyboard when network features are unavailable or not needed.  
+
+- **Network Diagnostics**  
+  The Manager shows the current MAC address and WiFi signal strength on both the Atari ST display and the web UI, and it replies to ICMP ping requests when connected.  
+
+- **Storage Workflows Through Microfirmwares**  
+  Booster itself no longer exposes USB mass storage directly. Use dedicated storage-oriented microfirmwares such as File Manager or Multi-drive when you need file-transfer workflows.  
 
 - **Multi-App Support**  
   Install and manage multiple app or microfirmwares simultaneously, ensuring flexible and dynamic usage.  
@@ -91,7 +103,7 @@ Finally, the **Global Settings (4K at 0x101FF000)** store system-wide configurat
 
 Each **microfirmware app is loaded at 0x10000000** after powering on the device. It can be updated over the air or through the web interface.  
 
-This design ensures efficient memory usage while providing a structured and extensible platform for managing multiple apps and configurations on the Raspberry Pi Pico W. 🚀 developement section.  
+This design ensures efficient memory usage while providing a structured and extensible platform for managing multiple apps and configurations on the Raspberry Pi Pico W.  
 
 ## Booster core libraries and components  
 
@@ -118,29 +130,35 @@ These libraries are part of the project and are included in the repository:
 
 ## Building the Project  
 
-To build the project assuming you have already cloned this repository and the submodules, follow these steps:  
+Initialize the submodules first:
 
-1. Install the required dependencies:
-   - CMake
-   - GCC ARM toolchain
+```bash
+git submodule init
+git submodule update --init --recursive
+```
 
-2. Modify the `version.txt` file to set the version of the project. The file in the root directory will be copied to the different executables needed.  
+Install the required dependencies:
 
-3. Execute the following command to build the project in release mode:
-   ```bash
-   ./build.sh pico_w release 
-   ```
+- CMake
+- Python 3
+- GCC ARM embedded toolchain (`arm-none-eabi-*`)
+- `stcmd` tooling for the embedded Atari ST terminal firmware
 
-4. To build the project in debug mode, execute the following command:
-   ```bash
-   ./build.sh pico_w debug 
-   ```
+The root `version.txt` file defines the release string and is copied into the subprojects by the build scripts.
 
-## Downloading the project
+Common root builds:
 
-> **Note**: The project is in alpha version so only the Alpha nightly builds are available. Use at your own risk. 
+```bash
+./build.sh pico_w debug
+./build.sh pico_w release
+./build.sh pico_w minsizerel
+```
 
-The project is available in the [Nightly releases section](https://github.com/sidecartridge/rp2-booster-bootloader/releases/tag/nightly) section.
+The combined UF2 is written to `dist/`. If you pass any third argument, the root build also creates the full-image artifacts (`*-full.uf2`, `upgrade.bin`, and `SIDECARTVERSION`).
+
+## Downloading the Project
+
+Firmware artifacts are published in the [GitHub Releases section](https://github.com/sidecartridge/rp2-booster-bootloader/releases). If you build locally, use the files generated in `dist/`.
 
 ## Installing the project
 
@@ -149,7 +167,7 @@ Go for the option that best suits you. Both options will install the bootloader 
 ###  Option 1: Using the drag-and-drop method
 1. Connect the Raspberry Pi Pico W micro USB connector to your computer while holding the **BOOTSEL** button.
 2. Your computer should recognize the device as the mass storage device `RPI-RP2`. Now you can release the **BOOTSEL** button.
-3. Drag and drop the [Full Release](https://github.com/sidecartridge/rp2-booster-bootloader/releases/download/nightly/rp-booster-v1.0.0alpha-full.uf2) file to the `RPI-RP2` drive.
+3. Drag and drop a downloaded `rp-booster-<version>-full.uf2` release asset, or a locally built `dist/rp-booster-<version>-full.uf2`, to the `RPI-RP2` drive.
 4. Wait for the file to be copied. When the copy is complete you can disconnect the Raspberry Pi Pico W from your computer.
 
 ### Option 2: Using picotool
@@ -160,7 +178,7 @@ With this method you must [first install the picotool](https://github.com/raspbe
 2. Your computer should recognize the device as the mass storage device `RPI-RP2`. Now you can release the **BOOTSEL** button.
 3. Flash the bootloader on your board:
 ```bash
-picotool load -xv dist/rp-booster-$VERSION.uf2
+picotool load -xv /path/to/rp-booster-<version>.uf2
 ```
 
 
@@ -174,7 +192,7 @@ picotool load -xv dist/rp-booster-$VERSION.uf2
 
 3. Power on the Atari ST computer.
 
-4. The Booster app will automatically start in **Factory (Fabric) mode**, showing the following message on screen:
+4. The Booster app will automatically start in **Factory mode**, showing the following message on screen:
 
    ![Booster Factory Mode step 1](/docs/BOOSTER-FABRIC-1.png)
 
@@ -225,9 +243,13 @@ picotool load -xv dist/rp-booster-$VERSION.uf2
 
 ## Booster Manager Mode
 
-In **Manager mode**, the Booster app will automatically connect to your configured WiFi network and will automatically connect to the public repository of microfirmware apps. 
+In **Manager mode**, the Booster app tries to connect to your configured WiFi network and then connects to the public repository of microfirmware apps.
 
-If your DHCP network supports a DNS with `.local` domains, you can access the web interface using `http://sidecart.local`. Otherwise, use the IP address assigned by your DHCP server and visible on your computer screen.
+If your DHCP network supports `.local` name resolution, you can access the web interface using `http://sidecart.local`. Otherwise, use the IP address assigned by your DHCP server and shown on the Atari ST screen.
+
+If WiFi retries are exhausted, Booster falls back to an **offline Manager mode**. In that state network features are disabled, but the Atari ST terminal remains available so you can still boot already-downloaded microfirmwares manually.
+
+The Atari ST Manager screen and the shared system information area in the web UI show the current MAC address and WiFi signal strength. When connected, Booster also answers ICMP ping requests to simplify network diagnostics.
 
 > **Note**: The device needs a SDHC or SDXC microSD card formatted with **exFAT** or **FAT32** file system to work properly. The app will warn the user if the microSD card is not present or not formatted correctly.
 
@@ -235,11 +257,11 @@ If your DHCP network supports a DNS with `.local` domains, you can access the we
 
 The **Apps view** shows:
 
-- The list of instalable apps from the public repository.
+- The list of installable apps from the public repository.
 - The list of installed apps on the device.
 - The list of apps that are not installed but are available on the microSD card.
 
-This view is the default view when you access the web interface.
+This view is the default view when you access the web interface. At the top of the page, the **Platform** and **Features** filters let you narrow the catalog dynamically.
 
 ![Booster Manager Apps View 1](/docs/BOOSTER-MANAGER-APPS-1.png)
 
@@ -258,6 +280,8 @@ At the right hand side of each app, you can see the following buttons:
 
 - **Launch**: Launch the app. This will install the app in the flash memory of the device and after reboot it will be launched automatically. If you want to launch an app that is already installed, you can use the **Launch** button at any time.
 
+On Atari ST systems, Manager mode also supports terminal-driven manual boot: press `ESC` to enter the apps workflow, or press any `SHIFT` key to continue booting from GEMDOS.
+
 ![Booster Manager Apps View 3](/docs/BOOSTER-MANAGER-APPS-3.png)
 
 When launching an app, the computer screen will show a message indicating that the app is being launched. The Booster app will make its best effort to also reboot the computer, but this may not always be possible. So assume that the computer is not rebooted and you need to do it manually.
@@ -265,8 +289,6 @@ When launching an app, the computer screen will show a message indicating that t
 The Booster microfirmware app is now installed in the flash memory of the device, and every time you power on the device, it will automatically launch the app. 
 
 To return to the Booster app, the user needs to use the command menu on the microfirmware app to do it, or press the SELECT button for more than 10 seconds and then power off and power on the device and the computer.
-
-> **Note**: In this Alpha version, the **DEV APP** is a placeholder development app for anybody who wants to develop a microfirmware app. It is not a real app and it does not do anything.
 
 ### WiFi view
 
@@ -278,7 +300,9 @@ The **WiFi view** shows the list of available WiFi networks and permits some bas
 - **Hostname**: The hostname of the device. This is used to identify the device on the network. By default is `sidecart`. 
 - **Wifi Power**: The power of the WiFi module. From 0 to 4. 
 - **Show RSSI**: Show the RSSI of the WiFi module. This is used to show the signal strength of the WiFi network.
-- **DHCP Enabled**: Enable or disable the DHCP server. This is used to assign IP addresses to the devices connected to the Booster app. In Alpha, only DHCP is tested.
+- **DHCP Enabled**: Enable or disable DHCP for the device. If disabled, the TCP/IP settings view lets you enter a static IPv4 address, netmask, gateway, and DNS servers.
+
+The system information banner also shows the Pico W MAC address, which is useful when configuring router allow-lists or debugging network issues.
 
 Don't forget to click the **Save** button to save the changes!
 
@@ -288,7 +312,7 @@ It's also possible to change the WiFi network. To do this, click on the new WiFi
 
 The Booster app will save the WiFi credentials to flash memory and reboot. It will then connect to your WiFi network and show a message on the computer screen.
 
-> **Note**: If the Booster app is not able to connect to the WiFi network, press SELECT button for ten seconds and power off and power on the device and the computer to start the Factory mode again.
+> **Note**: If Booster cannot connect to the configured WiFi network, it stays in offline Manager mode. To restore the WiFi factory defaults and configure the network again, hold the SELECT button for more than ten seconds and then power-cycle the device and computer.
 
 ### Device view
 
@@ -297,9 +321,8 @@ The **Device view** shows the device information and some basic configuration op
 ![Booster Manager Device View](/docs/BOOSTER-MANAGER-CONFIG-1.png)
 
 - **Apps folder**: The folder where the apps are stored. By default is `/apps`. This folder is created on the microSD card when the Booster app is launched for the first time if it does not exist.
-- **Apps catalog URL**: The URL of the apps catalog. By default is `http://atarist.sidecartridge.com/apps.json`. You can configure your own apps catalog URL if you want to use your own apps. In the alpha version, the `apps.json` file must be hosted in a HTTP server. HTTPS is not supported yet.
-- **Boot feature**: The UUID of the microfirmware app to load at boot time, or the Booster mode: `FABRIC` o `MANAGER`. If the app cannot find the UUID of the microfirmware in the flash memory, it will load the Booster app in **Manager mode**.
-- **Safe SELECT reboot**: Not used in alpha version.
+- **Apps catalog URL**: The URL of the apps catalog. By default is `http://atarist.sidecartridge.com/apps.json`. You can configure your own apps catalog URL if you want to use your own apps.
+- **Boot feature**: The UUID of the microfirmware app to load at boot time, or the Booster factory path. If the configured app cannot be found in flash memory, Booster falls back to **Manager mode**.
 - **SD card baud rate (KB)**: The baud rate of the SD card. By default is `12500`. It can be safely increased to `25000`. Above this value, the SD card may not work properly or the value will be ignored.
 
 Don't forget to click the **Save** button to save the changes!
@@ -307,7 +330,7 @@ Don't forget to click the **Save** button to save the changes!
 It also provides two buttons to reboot the device:
 
 - **Reboot the device**: Reboot the device and load the microfirmware app in flash memory. This is the normal way to reboot the device.
-- **Reboot the device in default fabric settings**: Reboot the device and load the Booster app in **Factory mode**. This is useful to reset the device to factory settings or to change the WiFi network.
+- **Restore to the default fabric settings**: Reboot the device and load the Booster app in **Factory mode**. This is useful to reset the WiFi configuration or return the device to its default setup.
 
 
 ## License
