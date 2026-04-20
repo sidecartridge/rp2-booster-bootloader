@@ -61,9 +61,23 @@
         // are only reachable from the Config page.
         visibleChannels: ['stable', 'beta'],
         switchingChannel: false,
+        channelSwitchError: '',
+        // Normalize before comparing so trailing slash, scheme case, or a query
+        // string don't flip a saved preset URL into "custom".
+        normalizeUrl(url) {
+          if (!url) return '';
+          let s = String(url).trim().toLowerCase();
+          const q = s.indexOf('?');
+          if (q >= 0) s = s.slice(0, q);
+          const h = s.indexOf('#');
+          if (h >= 0) s = s.slice(0, h);
+          if (s.endsWith('/')) s = s.slice(0, -1);
+          return s;
+        },
         currentChannel() {
+          const target = this.normalizeUrl(this.appsCatalogUrl);
           for (const key of Object.keys(this.channelUrls)) {
-            if (this.channelUrls[key] === this.appsCatalogUrl) return key;
+            if (this.normalizeUrl(this.channelUrls[key]) === target) return key;
           }
           return 'custom';
         },
@@ -76,6 +90,7 @@
           const url = this.channelUrls[channel];
           if (!url) return;
           this.switchingChannel = true;
+          this.channelSwitchError = '';
           const payload = JSON.stringify([
             { name: 'APPS_CATALOG_URL', type: 'STRING', value: url },
           ]);
@@ -83,18 +98,14 @@
           fetch(`/saveparams.cgi?json=${base64}`, { method: 'GET' })
             .then((res) => res.text())
             .then((text) => {
-              try {
-                const json = JSON.parse(text);
-                if (json.status !== 200) throw new Error(json.message);
-                window.location.reload();
-              } catch (e) {
-                this.switchingChannel = false;
-                console.error('Error switching channel:', e);
-              }
+              const json = JSON.parse(text);
+              if (json.status !== 200) throw new Error(json.message || 'Save failed');
+              this.switchingChannel = false;
+              window.location.reload();
             })
             .catch((err) => {
               this.switchingChannel = false;
-              console.error('Network error switching channel:', err);
+              this.channelSwitchError = `Could not switch channel: ${err.message || err}`;
             });
         },
 
@@ -637,6 +648,19 @@
           </button>
         </template>
       </div>
+    </div>
+
+    <div class="banner banner-error" x-show="channelSwitchError" x-cloak>
+      <i class="fas fa-exclamation-circle banner-icon"></i>
+      <span x-text="channelSwitchError"></span>
+      <button class="banner-close" @click="channelSwitchError = ''" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="banner banner-info loading-banner" x-show="!loaded_apps && !fetchError" x-cloak>
+      <i class="fas fa-circle-notch fa-spin banner-icon"></i>
+      <span>
+        Loading the <strong x-text="currentChannelLabel()"></strong> catalog&hellip;
+      </span>
     </div>
 
     <section class="filter-panel" x-show="loaded_apps" x-transition>
