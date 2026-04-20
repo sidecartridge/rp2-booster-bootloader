@@ -2,14 +2,17 @@
 
 ## v2.2.0 (2026-04-20) - release
 
-This release lets users pick which version of a microfirmware to install, including older ones when the publisher keeps them online.
+This release lets users pick which version of a microfirmware to install — including older ones when the publisher keeps them online — and switch between Stable and Beta catalog channels from the Apps page.
 
 ### Changes
 - Replace the Download/Update buttons on the Apps page with a single context-aware action button (Install / Update / Downgrade).
+- Replace the Apps catalog URL text input on the Config page with a channel dropdown (Stable / Beta / Development / Custom).
+- Show a loading indicator while the apps catalog is being fetched.
 
 ### New features
 - Add an optional `previous_versions` array to entries in `apps.json`, backwards compatible with existing catalogs.
 - Add a per-app version selector defaulting to the latest, with downgrades requiring an explicit confirmation.
+- Add a Stable/Beta channel switcher on the Apps page that updates the catalog URL and reloads on click.
 
 ### Fixes
 - Compare versions using a semantic-version comparator instead of string equality.
