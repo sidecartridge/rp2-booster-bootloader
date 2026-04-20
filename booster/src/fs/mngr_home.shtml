@@ -627,15 +627,13 @@
       <button class="banner-close" @click="show = false" aria-label="Close">&times;</button>
     </div>
     <h2>Available Apps</h2>
-    <p>
-      Browse the micro-firmwares available for your device. The action button installs the
-      selected version &mdash; the latest is picked by default, but you can choose an older
-      version from the dropdown when one is offered.
-    </p>
-    <p>
-      Use <strong>Launch</strong> to start an installed app. To return to this menu later, press the <strong>SELECT</strong>
-      button on the device and follow the instructions shown on your computer.
-    </p>
+    <p>This page lists the micro-firmwares you can install, launch, or remove.</p>
+    <ul class="apps-help">
+      <li><strong>Catalog channel</strong>: pick <strong>Stable</strong> for verified releases or <strong>Beta</strong> for newer, less-tested builds.</li>
+      <li><strong>Platform</strong> and <strong>Features</strong>: click the chips to filter the list. Combine filters to narrow the catalog.</li>
+      <li><strong>Action button</strong> (Install / Update / Downgrade): installs the version selected in the dropdown &mdash; latest by default. Downgrades ask for confirmation.</li>
+      <li><strong>Launch</strong>: starts an installed app. To return here later, press the <strong>SELECT</strong> button on the device and follow the on-screen instructions.</li>
+    </ul>
     <div class="filter-group channel-selector">
       <span class="filter-group-title">Catalog channel</span>
       <div class="filter-chip-list">
