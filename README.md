@@ -19,6 +19,12 @@ This is an advanced second-stage bootloader for the Raspberry Pi Pico W and the 
 - **Catalog Filters in the Apps View**  
   Narrow the public app catalog dynamically with Platform and Features filters so it is easier to find the right microfirmware.  
 
+- **Catalog Channel Selector**  
+  Switch between the **Stable** and **Beta** catalogs from the Apps page with a single click. Pick **Development** or a fully custom URL from the Config page when you need it.  
+
+- **Per-App Version Selector**  
+  Pick which version of a microfirmware to install. The latest is selected by default, but when the publisher exposes prior versions in the catalog you can roll back or pin to a known-good build, with a confirmation step for downgrades.  
+
 - **Offline-Capable Manager**  
   If Booster cannot connect to the configured WiFi network after its retry cycle, it stays usable in offline mode so already-downloaded microfirmwares can still be launched from the Atari ST terminal path.  
 
@@ -261,7 +267,7 @@ The **Apps view** shows:
 - The list of installed apps on the device.
 - The list of apps that are not installed but are available on the microSD card.
 
-This view is the default view when you access the web interface. At the top of the page, the **Platform** and **Features** filters let you narrow the catalog dynamically.
+This view is the default view when you access the web interface. At the top of the page a **Catalog channel** chip lets you switch between the **Stable** and **Beta** catalogs — clicking a channel saves the change and reloads the page. Below it, the **Platform** and **Features** filters let you narrow the catalog dynamically. While the catalog is being fetched, a loading indicator is shown.
 
 ![Booster Manager Apps View 1](/docs/BOOSTER-MANAGER-APPS-1.png)
 
@@ -272,8 +278,10 @@ Each app shows the following information:
 - **Features**: A list of features supported by the app as a taxonomy.
 - **Computer**: The computers supported by the app as a taxonomy.
 
+If the catalog publishes more than one version of an app, a **Version** dropdown appears under the app name. The latest version is selected by default; older versions, when available, are listed in semantic-version order. The currently installed version is tagged "(current)" when it is not the latest.
+
 At the right hand side of each app, you can see the following buttons:
-- **Download**: Download the app from the public repository to the micro SD card. But it does not launch it yet.
+- **Install vX / Update to vX / Downgrade to vX**: A single context-aware action button that installs the version selected in the dropdown. Its label and color reflect what the action will do relative to what is already installed. The button is hidden when the selected version is the one already installed. Downgrading to an older version requires an extra confirmation.
 - **Delete**: Delete the app from the device microSD card. You can download the app again if you want to.
 
 ![Booster Manager Apps View 2](/docs/BOOSTER-MANAGER-APPS-2.png)
@@ -321,7 +329,7 @@ The **Device view** shows the device information and some basic configuration op
 ![Booster Manager Device View](/docs/BOOSTER-MANAGER-CONFIG-1.png)
 
 - **Apps folder**: The folder where the apps are stored. By default is `/apps`. This folder is created on the microSD card when the Booster app is launched for the first time if it does not exist.
-- **Apps catalog URL**: The URL of the apps catalog. By default is `http://atarist.sidecartridge.com/apps.json`. You can configure your own apps catalog URL if you want to use your own apps.
+- **Apps catalog URL**: Pick the catalog channel — **Stable**, **Beta**, or **Development** — or choose **Custom apps catalog URL** to enter your own. The default is the Stable channel (`http://atarist.sidecartridge.com/apps.json`). The Stable and Beta channels are also reachable as a one-click chip on the Apps page.
 - **Boot feature**: The UUID of the microfirmware app to load at boot time, or the Booster factory path. If the configured app cannot be found in flash memory, Booster falls back to **Manager mode**.
 - **SD card baud rate (KB)**: The baud rate of the SD card. By default is `12500`. It can be safely increased to `25000`. Above this value, the SD card may not work properly or the value will be ignored.
 

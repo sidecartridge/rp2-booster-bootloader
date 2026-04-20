@@ -467,6 +467,12 @@ ul.device-tags li {
 
 .app-actions .pure-button {
   width: 100%;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+  padding: 0.4em 0.6em;
+  min-height: 2.2em;
 }
 
 .app-actions .button-delete {
@@ -476,6 +482,41 @@ ul.device-tags li {
 
 .app-actions .button-delete:hover {
   background-color: #c62828;
+}
+
+.app-actions .button-downgrade,
+.modal-buttons .button-downgrade {
+  background-color: #f0ad4e;
+  color: #fff;
+}
+
+.app-actions .button-downgrade:hover,
+.modal-buttons .button-downgrade:hover {
+  background-color: #d18c2b;
+}
+
+.version-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+}
+
+.version-selector select {
+  padding: 0.15rem 0.35rem;
+  font-size: 0.85rem;
+}
+
+.installed-version-note {
+  font-size: 0.8rem;
+  font-weight: normal;
+  color: #777;
+  margin-left: 0.4rem;
+}
+
+.channel-selector {
+  margin: 0.5rem 0 1rem;
 }
 
 @media (max-width: 600px) {
@@ -501,6 +542,9 @@ ul.device-tags li {
   display: flex;
 }
 .modal[x-show="showLaunchModal"] {
+  display: flex;
+}
+.modal[x-show="showDowngradeModal"] {
   display: flex;
 }
 .modal[x-show="showInfoModal"] {

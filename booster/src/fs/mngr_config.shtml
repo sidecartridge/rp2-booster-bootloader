@@ -49,12 +49,45 @@
             params: [],
             originalParams: [],
             sdSpeedOptions: Array.from({ length: 24 }, (_, i) => (i + 1) * 1000),
+            channelUrls: {
+              stable: 'http://atarist.sidecartridge.com/apps.json',
+              beta:   'http://atarist.sidecartridge.com/apps-beta.json',
+              dev:    'http://atarist.sidecartridge.com/apps-dev.json',
+            },
+            appsChannel: 'stable',
+            customAppsUrl: '',
             normalizeSdSpeed(value) {
               const parsed = Number.parseInt(value, 10);
               if (Number.isNaN(parsed)) return "1000";
               const rounded = Math.round(parsed / 1000) * 1000;
               const clamped = Math.min(24000, Math.max(1000, rounded));
               return String(clamped);
+            },
+            normalizeUrl(url) {
+              if (!url) return '';
+              let s = String(url).trim().toLowerCase();
+              const q = s.indexOf('?');
+              if (q >= 0) s = s.slice(0, q);
+              const h = s.indexOf('#');
+              if (h >= 0) s = s.slice(0, h);
+              if (s.endsWith('/')) s = s.slice(0, -1);
+              return s;
+            },
+            detectChannel(url) {
+              const target = this.normalizeUrl(url);
+              for (const key of Object.keys(this.channelUrls)) {
+                if (this.normalizeUrl(this.channelUrls[key]) === target) return key;
+              }
+              return 'custom';
+            },
+            // Reactive sync: whenever appsChannel or customAppsUrl change, write
+            // the resolved URL back into the corresponding params entry.
+            syncAppsCatalogUrl() {
+              const param = this.params.find(p => p.name === 'APPS_CATALOG_URL');
+              if (!param) return;
+              param.value = this.appsChannel === 'custom'
+                ? this.customAppsUrl
+                : this.channelUrls[this.appsChannel];
             },
             init() {
               fetch('/deviceconf.shtml')
@@ -66,6 +99,11 @@
                     }
                     return param;
                   });
+                  const appsParam = this.params.find(p => p.name === 'APPS_CATALOG_URL');
+                  if (appsParam) {
+                    this.appsChannel = this.detectChannel(appsParam.value);
+                    this.customAppsUrl = this.appsChannel === 'custom' ? appsParam.value : '';
+                  }
                   this.originalParams = JSON.parse(JSON.stringify(this.params));
                 })
                 .catch(err => console.error('Error fetching device params:', err));
@@ -97,6 +135,11 @@
 
             cancel() {
               this.params = JSON.parse(JSON.stringify(this.originalParams));
+              const appsParam = this.params.find(p => p.name === 'APPS_CATALOG_URL');
+              if (appsParam) {
+                this.appsChannel = this.detectChannel(appsParam.value);
+                this.customAppsUrl = this.appsChannel === 'custom' ? appsParam.value : '';
+              }
             }
           };
         }
@@ -165,8 +208,26 @@
           </div>
 
           <div class="pure-u-1 pure-u-md-2-3">
+            <!-- Apps Catalog URL: channel selector. x-effect re-runs whenever
+                 appsChannel or customAppsUrl change and writes the resolved URL
+                 back into param.value, so save() can stay channel-agnostic. -->
+            <template x-if="param.name === 'APPS_CATALOG_URL'">
+              <div x-effect="syncAppsCatalogUrl()">
+                <select class="pure-input-1" x-model="appsChannel"
+                  x-bind:title="param.placeholder">
+                  <option value="stable">Stable channel (default)</option>
+                  <option value="beta">Beta channel</option>
+                  <option value="dev">Development channel</option>
+                  <option value="custom">Custom apps catalog URL</option>
+                </select>
+                <input x-show="appsChannel === 'custom'" type="text" class="pure-input-1"
+                  style="margin-top: 0.5rem;" x-model="customAppsUrl"
+                  maxlength="128" placeholder="Enter custom apps catalog URL">
+              </div>
+            </template>
+
             <!-- String Input -->
-            <template x-if="param.type === 'STRING'">
+            <template x-if="param.type === 'STRING' && param.name !== 'APPS_CATALOG_URL'">
               <input type="text" class="pure-input-1" x-model="param.value" maxlength="128"
                 x-bind:title="param.placeholder">
             </template>

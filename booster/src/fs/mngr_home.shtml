@@ -35,12 +35,79 @@
         loaded_apps: false,
         showDeleteModal: false,
         showLaunchModal: false,
+        showDowngradeModal: false,
         uuidToDelete: null,
         uuidToLaunch: null,
+        uuidToDowngrade: null,
+        downgradeFromVersion: null,
+        downgradeToVersion: null,
         retryAttempts: 0,
         maxRetries: 3,
         initialized: false, // new flag to prevent duplicate init
         fetchError: false,  // new flag for remote fetch error
+        appsCatalogUrl: `<!--#APPSURL-->`,
+        channelUrls: {
+          stable: 'http://atarist.sidecartridge.com/apps.json',
+          beta:   'http://atarist.sidecartridge.com/apps-beta.json',
+          dev:    'http://atarist.sidecartridge.com/apps-dev.json',
+        },
+        channelLabels: {
+          stable: 'Stable',
+          beta:   'Beta',
+          dev:    'Development',
+          custom: 'Custom',
+        },
+        // Chips shown on the Apps page. Other channels (Development, Custom)
+        // are only reachable from the Config page.
+        visibleChannels: ['stable', 'beta'],
+        switchingChannel: false,
+        channelSwitchError: '',
+        // Normalize before comparing so trailing slash, scheme case, or a query
+        // string don't flip a saved preset URL into "custom".
+        normalizeUrl(url) {
+          if (!url) return '';
+          let s = String(url).trim().toLowerCase();
+          const q = s.indexOf('?');
+          if (q >= 0) s = s.slice(0, q);
+          const h = s.indexOf('#');
+          if (h >= 0) s = s.slice(0, h);
+          if (s.endsWith('/')) s = s.slice(0, -1);
+          return s;
+        },
+        currentChannel() {
+          const target = this.normalizeUrl(this.appsCatalogUrl);
+          for (const key of Object.keys(this.channelUrls)) {
+            if (this.normalizeUrl(this.channelUrls[key]) === target) return key;
+          }
+          return 'custom';
+        },
+        currentChannelLabel() {
+          return this.channelLabels[this.currentChannel()] || 'Custom';
+        },
+        switchChannel(channel) {
+          if (this.switchingChannel) return;
+          if (this.currentChannel() === channel) return;
+          const url = this.channelUrls[channel];
+          if (!url) return;
+          this.switchingChannel = true;
+          this.channelSwitchError = '';
+          const payload = JSON.stringify([
+            { name: 'APPS_CATALOG_URL', type: 'STRING', value: url },
+          ]);
+          const base64 = btoa(payload);
+          fetch(`/saveparams.cgi?json=${base64}`, { method: 'GET' })
+            .then((res) => res.text())
+            .then((text) => {
+              const json = JSON.parse(text);
+              if (json.status !== 200) throw new Error(json.message || 'Save failed');
+              this.switchingChannel = false;
+              window.location.reload();
+            })
+            .catch((err) => {
+              this.switchingChannel = false;
+              this.channelSwitchError = `Could not switch channel: ${err.message || err}`;
+            });
+        },
 
         init() {
           if (this.initialized) return;
@@ -55,6 +122,7 @@
             .then((response) => response.json())
             .then((data) => {
               this.apps = data.apps || [];
+              this.apps.forEach((app) => this.normalizeVersions(app));
 
               // 2) Fetch local apps
               this.fetchLocalAppsFirst();
@@ -184,17 +252,12 @@
             const localApp = this.local_apps.find((loc) => loc.uuid === remoteApp.uuid);
 
             if (localApp) {
-              // If found, mark installed=true
               remoteApp.installed = true;
-              // Check version
-              if (localApp.version !== remoteApp.version) {
-                remoteApp.update = true;
-              } else {
-                remoteApp.update = false;
-              }
+              remoteApp.installedVersion = localApp.version;
+              remoteApp.update = this.compareSemver(remoteApp.version, localApp.version) > 0;
             } else {
-              // Not found => installed=false, update=false
               remoteApp.installed = false;
+              remoteApp.installedVersion = null;
               remoteApp.update = false;
             }
           });
@@ -218,6 +281,170 @@
         // Utility: check if an object has any keys
         isNonEmptyObject(obj) {
           return obj && typeof obj === "object" && Object.keys(obj).length > 0;
+        },
+
+        // Parse a version string into numeric segments + optional pre-release tail.
+        // Pre-release is anything after a '-' or trailing letters (e.g. "0.0.1dev", "1.0.0-rc1").
+        // A version with a pre-release tail sorts BEFORE the same numeric core without one.
+        parseSemver(v) {
+          const s = String(v == null ? "" : v).trim().replace(/^[vV]/, "");
+          let core = s;
+          let pre = null;
+          const dash = s.indexOf("-");
+          if (dash >= 0) {
+            core = s.slice(0, dash);
+            pre = s.slice(dash + 1);
+          } else {
+            const m = s.match(/^(\d+(?:\.\d+)*)([A-Za-z].*)$/);
+            if (m) {
+              core = m[1];
+              pre = m[2];
+            }
+          }
+          const nums = core.split(".").map((n) => parseInt(n, 10) || 0);
+          while (nums.length < 3) nums.push(0);
+          return { nums, pre };
+        },
+
+        // Display a version with a single leading 'v', regardless of whether the
+        // catalog author wrote "2.1.2" or "v2.1.2".
+        displayVersion(v) {
+          if (v == null) return "";
+          const s = String(v).trim();
+          if (!s) return "";
+          return /^v/i.test(s) ? s : "v" + s;
+        },
+
+        compareSemver(a, b) {
+          const va = this.parseSemver(a);
+          const vb = this.parseSemver(b);
+          const len = Math.max(va.nums.length, vb.nums.length);
+          for (let i = 0; i < len; i++) {
+            const na = va.nums[i] || 0;
+            const nb = vb.nums[i] || 0;
+            if (na !== nb) return na < nb ? -1 : 1;
+          }
+          if (va.pre && !vb.pre) return -1;
+          if (!va.pre && vb.pre) return 1;
+          if (va.pre && vb.pre) return va.pre.localeCompare(vb.pre);
+          return 0;
+        },
+
+        // Build app.allVersions = [latest, ...previous_versions] sorted descending.
+        // Default app.selectedVersion to the latest entry. Backwards compatible: if
+        // previous_versions is missing or empty, allVersions has length 1.
+        normalizeVersions(app) {
+          const triples = [];
+          if (app.binary && app.version) {
+            triples.push({ binary: app.binary, md5: app.md5, version: app.version });
+          }
+          if (Array.isArray(app.previous_versions)) {
+            app.previous_versions.forEach((v) => {
+              if (v && v.binary && v.version) {
+                triples.push({ binary: v.binary, md5: v.md5, version: v.version });
+              }
+            });
+          }
+          // Dedupe by version, then sort descending.
+          const seen = new Set();
+          const unique = triples.filter((t) => {
+            if (seen.has(t.version)) return false;
+            seen.add(t.version);
+            return true;
+          });
+          unique.sort((a, b) => this.compareSemver(b.version, a.version));
+          app.allVersions = unique;
+          app.selectedVersion = unique[0] || null;
+        },
+
+        onVersionChange(app, version) {
+          const match = (app.allVersions || []).find((v) => v.version === version);
+          if (match) app.selectedVersion = match;
+        },
+
+        // Label for one option in the version dropdown: "(latest)" for the top entry,
+        // "(current)" for the installed version when it's not the latest.
+        versionOptionLabel(app, v, idx) {
+          const dv = this.displayVersion(v.version);
+          if (idx === 0) return dv + " (latest)";
+          if (app.installed && app.installedVersion === v.version) return dv + " (current)";
+          return dv;
+        },
+
+        // Returns 'install' | 'update' | 'reinstall' | 'downgrade' for the currently
+        // selected version, relative to what's installed locally.
+        versionStatus(app) {
+          const target = app.selectedVersion ? app.selectedVersion.version : app.version;
+          if (!app.installed) return "install";
+          const cmp = this.compareSemver(target, app.installedVersion);
+          if (cmp > 0) return "update";
+          if (cmp < 0) return "downgrade";
+          return "reinstall";
+        },
+
+        actionLabel(app, busy) {
+          const status = this.versionStatus(app);
+          const v = app.selectedVersion ? app.selectedVersion.version : app.version;
+          if (busy) {
+            switch (status) {
+              case "install": return "Installing\u2026";
+              case "update": return "Updating\u2026";
+              case "downgrade": return "Downgrading\u2026";
+            }
+          }
+          const dv = this.displayVersion(v);
+          switch (status) {
+            case "install": return `Install ${dv}`;
+            case "update": return `Update to ${dv}`;
+            case "downgrade": return `Downgrade to ${dv}`;
+          }
+          return "";
+        },
+
+        // Build the JSON payload posted to /download.cgi from the selected version,
+        // stripping client-only fields to keep the URL small.
+        buildDownloadPayload(app) {
+          const triple = app.selectedVersion || { binary: app.binary, md5: app.md5, version: app.version };
+          const payload = Object.assign({}, app, {
+            binary: triple.binary,
+            md5: triple.md5,
+            version: triple.version,
+            description: "",
+          });
+          delete payload.previous_versions;
+          delete payload.allVersions;
+          delete payload.selectedVersion;
+          delete payload.installedVersion;
+          return payload;
+        },
+
+        dispatchAction(app, status) {
+          if (app.busy) return;
+          app.busy = true;
+          const base64 = btoa(JSON.stringify(this.buildDownloadPayload(app)));
+          const updatePrefix = status === "install" ? "" : "update=T&";
+          window.location = `/download.cgi?${updatePrefix}json=${base64}`;
+        },
+
+        performAction(uuid) {
+          const app = this.apps.find((a) => a.uuid === uuid);
+          if (!app || app.busy) return;
+          const status = this.versionStatus(app);
+          if (status === "downgrade") {
+            this.uuidToDowngrade = uuid;
+            this.downgradeFromVersion = app.installedVersion;
+            this.downgradeToVersion = app.selectedVersion ? app.selectedVersion.version : app.version;
+            this.showDowngradeModal = true;
+            return;
+          }
+          this.dispatchAction(app, status);
+        },
+
+        confirmDowngradeNow() {
+          const app = this.apps.find((a) => a.uuid === this.uuidToDowngrade);
+          this.showDowngradeModal = false;
+          if (!app) return;
+          this.dispatchAction(app, "downgrade");
         },
 
         normalizeTaxonomyValues(value) {
@@ -318,25 +545,6 @@
           return this.apps.filter((app) => this.matchesSelectedFilters(app));
         },
 
-        // Download a remote app
-        download(uuid) {
-          const selectedApp = this.apps.find((app) => app.uuid === uuid);
-          if (!selectedApp) {
-            console.error("App not found for UUID:", uuid);
-            return;
-          }
-          // Prevent multiple clicks
-          if (selectedApp.busy) return;
-          selectedApp.busy = true;
-          // Prepare JSON
-          selectedApp.description = ""; // Clear description to avoid size issues
-          const jsonStr = JSON.stringify(selectedApp);
-          // Base64 encode
-          const base64 = btoa(jsonStr);
-          // Redirect
-          window.location = `/download.cgi?json=${base64}`;
-        },
-
         // Trigger the modal for a specific UUID
         confirmRemove(uuid) {
           this.uuidToDelete = uuid;
@@ -349,26 +557,6 @@
           if (this.uuidToDelete) {
             window.location = `/mngr_deleteapp.cgi?uuid=${encodeURIComponent(this.uuidToDelete)}`;
           }
-        },
-
-        // Update
-        confirmUpdate(uuid) {
-          console.log('Updating app with uuid:', uuid);
-          const selectedApp = this.apps.find((app) => app.uuid === uuid);
-          if (!selectedApp) {
-            console.error("App not found for UUID:", uuid);
-            return;
-          }
-          // Prevent multiple clicks
-          if (selectedApp.busy) return;
-          selectedApp.busy = true;
-          // Prepare JSON
-          selectedApp.description = ""; // Clear description to avoid size issues
-          const jsonStr = JSON.stringify(selectedApp);
-          // Base64 encode
-          const base64 = btoa(jsonStr);
-          // Redirect
-          window.location = `/download.cgi?update=T&json=${base64}`;
         },
 
         // Confirm launch
@@ -439,14 +627,39 @@
       <button class="banner-close" @click="show = false" aria-label="Close">&times;</button>
     </div>
     <h2>Available Apps</h2>
-    <p>
-      Browse the micro-firmwares available for your device. Use <strong>Download</strong> to install a new app, or
-      <strong>Update</strong> when a newer version is available.
-    </p>
-    <p>
-      Use <strong>Launch</strong> to start an installed app. To return to this menu later, press the <strong>SELECT</strong>
-      button on the device and follow the instructions shown on your computer.
-    </p>
+    <p>This page lists the micro-firmwares you can install, launch, or remove.</p>
+    <ul class="apps-help">
+      <li><strong>Catalog channel</strong>: pick <strong>Stable</strong> for verified releases or <strong>Beta</strong> for newer, less-tested builds.</li>
+      <li><strong>Platform</strong> and <strong>Features</strong>: click the chips to filter the list. Combine filters to narrow the catalog.</li>
+      <li><strong>Action button</strong> (Install / Update / Downgrade): installs the version selected in the dropdown &mdash; latest by default. Downgrades ask for confirmation.</li>
+      <li><strong>Launch</strong>: starts an installed app. To return here later, press the <strong>SELECT</strong> button on the device and follow the on-screen instructions.</li>
+    </ul>
+    <div class="filter-group channel-selector">
+      <span class="filter-group-title">Catalog channel</span>
+      <div class="filter-chip-list">
+        <template x-for="channel in visibleChannels" :key="channel">
+          <button type="button" class="filter-chip"
+            :class="{ 'filter-chip-active': currentChannel() === channel }"
+            :disabled="switchingChannel"
+            @click="switchChannel(channel)">
+            <span x-text="channelLabels[channel]"></span>
+          </button>
+        </template>
+      </div>
+    </div>
+
+    <div class="banner banner-error" x-show="channelSwitchError" x-cloak>
+      <i class="fas fa-exclamation-circle banner-icon"></i>
+      <span x-text="channelSwitchError"></span>
+      <button class="banner-close" @click="channelSwitchError = ''" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="banner banner-info loading-banner" x-show="!loaded_apps && !fetchError" x-cloak>
+      <i class="fas fa-circle-notch fa-spin banner-icon"></i>
+      <span>
+        Loading the <strong x-text="currentChannelLabel()"></strong> catalog&hellip;
+      </span>
+    </div>
 
     <section class="filter-panel" x-show="loaded_apps" x-transition>
       <div class="filter-groups">
@@ -544,7 +757,16 @@
 
 
     <section class="app-list pure-g" x-show="loaded_apps" x-transition>
-      <div class="banner banner-info filter-empty-state" x-show="loaded_apps && filteredApps().length === 0">
+      <div class="banner banner-info filter-empty-state"
+        x-show="loaded_apps && !fetchError && apps.length === 0">
+        <i class="fas fa-info-circle banner-icon"></i>
+        <span>
+          The <strong x-text="currentChannelLabel()"></strong> catalog is empty.
+          <a href="/mngr_config.shtml">Pick another channel</a> in the Config page.
+        </span>
+      </div>
+      <div class="banner banner-info filter-empty-state"
+        x-show="loaded_apps && apps.length > 0 && filteredApps().length === 0">
         <i class="fas fa-info-circle banner-icon"></i>
         <span>No apps match the selected filters.</span>
       </div>
@@ -564,7 +786,27 @@
           <div class="pure-u-1 pure-u-md-2-3 app-details">
             <!-- App Name -->
             <h3 x-text="app.name"></h3>
-            <h4 x-text="app.version"></h4>
+            <h4>
+              <span x-text="displayVersion(app.selectedVersion ? app.selectedVersion.version : app.version)"></span>
+              <template x-if="app.installed && app.installedVersion && app.selectedVersion && app.installedVersion !== app.selectedVersion.version">
+                <span class="installed-version-note" x-text="'(installed: ' + displayVersion(app.installedVersion) + ')'"></span>
+              </template>
+            </h4>
+            <!-- Version selector: only when more than one version is published -->
+            <template x-if="app.allVersions && app.allVersions.length > 1">
+              <div class="version-selector">
+                <label :for="'version-' + app.uuid">Version:</label>
+                <select :id="'version-' + app.uuid"
+                        :disabled="app.busy"
+                        @change="onVersionChange(app, $event.target.value)">
+                  <template x-for="(v, idx) in app.allVersions" :key="v.version">
+                    <option :value="v.version"
+                            :selected="app.selectedVersion && app.selectedVersion.version === v.version"
+                            x-text="versionOptionLabel(app, v, idx)"></option>
+                  </template>
+                </select>
+              </div>
+            </template>
             <!-- App Description -->
             <p x-html="app.description"></p>
             <!-- Combined Tags in one line -->
@@ -586,18 +828,14 @@
 
           <!-- Right-hand side: Buttons (1/6 on md) -->
           <div class="pure-u-1 pure-u-md-1-6 app-actions">
-            <!-- Download button: only visible if not installed -->
-            <button class="pure-button pure-button-primary" x-show="!app.installed" :disabled="app.busy"
-              @click="download(app.uuid)">
-              <span x-show="!app.busy">Download</span>
-              <span x-show="app.busy">Downloading…</span>
-            </button>
-
-            <!-- Update button: only visible if app.update is true -->
-            <button class="pure-button" x-show="app.update" :disabled="app.busy" @click="confirmUpdate(app.uuid)">
-              <span x-show="!app.busy">Update</span>
-              <span x-show="app.busy">Updating…</span>
-            </button>
+            <!-- Dynamic action button: Install / Update / Downgrade. Hidden when the
+                 selected version is already installed (status === 'reinstall'). -->
+            <button class="pure-button pure-button-primary"
+                    :class="{ 'button-downgrade': versionStatus(app) === 'downgrade' }"
+                    :disabled="app.busy"
+                    x-show="versionStatus(app) !== 'reinstall'"
+                    @click="performAction(app.uuid)"
+                    x-text="actionLabel(app, app.busy)"></button>
 
             <!-- Launch button: only visible if installed is true -->
             <button class="pure-button" x-show="app.installed" @click="confirmLaunch(app.uuid)">
@@ -632,6 +870,31 @@
 
           <!-- Cancel button -->
           <button class="pure-button" @click="showDeleteModal=false">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Downgrade confirmation modal -->
+    <div class="modal" x-show="showDowngradeModal" x-cloak x-transition>
+      <div class="modal-overlay" @click="showDowngradeModal=false"></div>
+
+      <div class="modal-content">
+        <h3>Confirm Downgrade</h3>
+        <p>
+          You are about to replace the installed version
+          <strong x-text="displayVersion(downgradeFromVersion) || '?'"></strong>
+          with an older version
+          <strong x-text="displayVersion(downgradeToVersion) || '?'"></strong>.
+        </p>
+        <p>Older versions may lack features or fixes from the current release. Continue?</p>
+
+        <div class="modal-buttons">
+          <button class="pure-button button-downgrade" @click="confirmDowngradeNow()">
+            Yes, Downgrade
+          </button>
+          <button class="pure-button" @click="showDowngradeModal=false">
             Cancel
           </button>
         </div>
