@@ -515,6 +515,10 @@ ul.device-tags li {
   margin-left: 0.4rem;
 }
 
+.channel-selector {
+  margin: 0.5rem 0 1rem;
+}
+
 @media (max-width: 600px) {
   .filter-chip-list {
     gap: 0.4rem;

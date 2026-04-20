@@ -45,6 +45,58 @@
         maxRetries: 3,
         initialized: false, // new flag to prevent duplicate init
         fetchError: false,  // new flag for remote fetch error
+        appsCatalogUrl: `<!--#APPSURL-->`,
+        channelUrls: {
+          stable: 'http://atarist.sidecartridge.com/apps.json',
+          beta:   'http://atarist.sidecartridge.com/apps-beta.json',
+          dev:    'http://atarist.sidecartridge.com/apps-dev.json',
+        },
+        channelLabels: {
+          stable: 'Stable',
+          beta:   'Beta',
+          dev:    'Development',
+          custom: 'Custom',
+        },
+        // Chips shown on the Apps page. Other channels (Development, Custom)
+        // are only reachable from the Config page.
+        visibleChannels: ['stable', 'beta'],
+        switchingChannel: false,
+        currentChannel() {
+          for (const key of Object.keys(this.channelUrls)) {
+            if (this.channelUrls[key] === this.appsCatalogUrl) return key;
+          }
+          return 'custom';
+        },
+        currentChannelLabel() {
+          return this.channelLabels[this.currentChannel()] || 'Custom';
+        },
+        switchChannel(channel) {
+          if (this.switchingChannel) return;
+          if (this.currentChannel() === channel) return;
+          const url = this.channelUrls[channel];
+          if (!url) return;
+          this.switchingChannel = true;
+          const payload = JSON.stringify([
+            { name: 'APPS_CATALOG_URL', type: 'STRING', value: url },
+          ]);
+          const base64 = btoa(payload);
+          fetch(`/saveparams.cgi?json=${base64}`, { method: 'GET' })
+            .then((res) => res.text())
+            .then((text) => {
+              try {
+                const json = JSON.parse(text);
+                if (json.status !== 200) throw new Error(json.message);
+                window.location.reload();
+              } catch (e) {
+                this.switchingChannel = false;
+                console.error('Error switching channel:', e);
+              }
+            })
+            .catch((err) => {
+              this.switchingChannel = false;
+              console.error('Network error switching channel:', err);
+            });
+        },
 
         init() {
           if (this.initialized) return;
@@ -573,6 +625,19 @@
       Use <strong>Launch</strong> to start an installed app. To return to this menu later, press the <strong>SELECT</strong>
       button on the device and follow the instructions shown on your computer.
     </p>
+    <div class="filter-group channel-selector">
+      <span class="filter-group-title">Catalog channel</span>
+      <div class="filter-chip-list">
+        <template x-for="channel in visibleChannels" :key="channel">
+          <button type="button" class="filter-chip"
+            :class="{ 'filter-chip-active': currentChannel() === channel }"
+            :disabled="switchingChannel"
+            @click="switchChannel(channel)">
+            <span x-text="channelLabels[channel]"></span>
+          </button>
+        </template>
+      </div>
+    </div>
 
     <section class="filter-panel" x-show="loaded_apps" x-transition>
       <div class="filter-groups">
@@ -670,7 +735,16 @@
 
 
     <section class="app-list pure-g" x-show="loaded_apps" x-transition>
-      <div class="banner banner-info filter-empty-state" x-show="loaded_apps && filteredApps().length === 0">
+      <div class="banner banner-info filter-empty-state"
+        x-show="loaded_apps && !fetchError && apps.length === 0">
+        <i class="fas fa-info-circle banner-icon"></i>
+        <span>
+          The <strong x-text="currentChannelLabel()"></strong> catalog is empty.
+          <a href="/mngr_config.shtml">Pick another channel</a> in the Config page.
+        </span>
+      </div>
+      <div class="banner banner-info filter-empty-state"
+        x-show="loaded_apps && apps.length > 0 && filteredApps().length === 0">
         <i class="fas fa-info-circle banner-icon"></i>
         <span>No apps match the selected filters.</span>
       </div>
