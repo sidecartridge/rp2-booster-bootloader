@@ -35,8 +35,12 @@
         loaded_apps: false,
         showDeleteModal: false,
         showLaunchModal: false,
+        showDowngradeModal: false,
         uuidToDelete: null,
         uuidToLaunch: null,
+        uuidToDowngrade: null,
+        downgradeFromVersion: null,
+        downgradeToVersion: null,
         retryAttempts: 0,
         maxRetries: 3,
         initialized: false, // new flag to prevent duplicate init
@@ -55,6 +59,7 @@
             .then((response) => response.json())
             .then((data) => {
               this.apps = data.apps || [];
+              this.apps.forEach((app) => this.normalizeVersions(app));
 
               // 2) Fetch local apps
               this.fetchLocalAppsFirst();
@@ -184,17 +189,12 @@
             const localApp = this.local_apps.find((loc) => loc.uuid === remoteApp.uuid);
 
             if (localApp) {
-              // If found, mark installed=true
               remoteApp.installed = true;
-              // Check version
-              if (localApp.version !== remoteApp.version) {
-                remoteApp.update = true;
-              } else {
-                remoteApp.update = false;
-              }
+              remoteApp.installedVersion = localApp.version;
+              remoteApp.update = this.compareSemver(remoteApp.version, localApp.version) > 0;
             } else {
-              // Not found => installed=false, update=false
               remoteApp.installed = false;
+              remoteApp.installedVersion = null;
               remoteApp.update = false;
             }
           });
@@ -218,6 +218,170 @@
         // Utility: check if an object has any keys
         isNonEmptyObject(obj) {
           return obj && typeof obj === "object" && Object.keys(obj).length > 0;
+        },
+
+        // Parse a version string into numeric segments + optional pre-release tail.
+        // Pre-release is anything after a '-' or trailing letters (e.g. "0.0.1dev", "1.0.0-rc1").
+        // A version with a pre-release tail sorts BEFORE the same numeric core without one.
+        parseSemver(v) {
+          const s = String(v == null ? "" : v).trim().replace(/^[vV]/, "");
+          let core = s;
+          let pre = null;
+          const dash = s.indexOf("-");
+          if (dash >= 0) {
+            core = s.slice(0, dash);
+            pre = s.slice(dash + 1);
+          } else {
+            const m = s.match(/^(\d+(?:\.\d+)*)([A-Za-z].*)$/);
+            if (m) {
+              core = m[1];
+              pre = m[2];
+            }
+          }
+          const nums = core.split(".").map((n) => parseInt(n, 10) || 0);
+          while (nums.length < 3) nums.push(0);
+          return { nums, pre };
+        },
+
+        // Display a version with a single leading 'v', regardless of whether the
+        // catalog author wrote "2.1.2" or "v2.1.2".
+        displayVersion(v) {
+          if (v == null) return "";
+          const s = String(v).trim();
+          if (!s) return "";
+          return /^v/i.test(s) ? s : "v" + s;
+        },
+
+        compareSemver(a, b) {
+          const va = this.parseSemver(a);
+          const vb = this.parseSemver(b);
+          const len = Math.max(va.nums.length, vb.nums.length);
+          for (let i = 0; i < len; i++) {
+            const na = va.nums[i] || 0;
+            const nb = vb.nums[i] || 0;
+            if (na !== nb) return na < nb ? -1 : 1;
+          }
+          if (va.pre && !vb.pre) return -1;
+          if (!va.pre && vb.pre) return 1;
+          if (va.pre && vb.pre) return va.pre.localeCompare(vb.pre);
+          return 0;
+        },
+
+        // Build app.allVersions = [latest, ...previous_versions] sorted descending.
+        // Default app.selectedVersion to the latest entry. Backwards compatible: if
+        // previous_versions is missing or empty, allVersions has length 1.
+        normalizeVersions(app) {
+          const triples = [];
+          if (app.binary && app.version) {
+            triples.push({ binary: app.binary, md5: app.md5, version: app.version });
+          }
+          if (Array.isArray(app.previous_versions)) {
+            app.previous_versions.forEach((v) => {
+              if (v && v.binary && v.version) {
+                triples.push({ binary: v.binary, md5: v.md5, version: v.version });
+              }
+            });
+          }
+          // Dedupe by version, then sort descending.
+          const seen = new Set();
+          const unique = triples.filter((t) => {
+            if (seen.has(t.version)) return false;
+            seen.add(t.version);
+            return true;
+          });
+          unique.sort((a, b) => this.compareSemver(b.version, a.version));
+          app.allVersions = unique;
+          app.selectedVersion = unique[0] || null;
+        },
+
+        onVersionChange(app, version) {
+          const match = (app.allVersions || []).find((v) => v.version === version);
+          if (match) app.selectedVersion = match;
+        },
+
+        // Label for one option in the version dropdown: "(latest)" for the top entry,
+        // "(current)" for the installed version when it's not the latest.
+        versionOptionLabel(app, v, idx) {
+          const dv = this.displayVersion(v.version);
+          if (idx === 0) return dv + " (latest)";
+          if (app.installed && app.installedVersion === v.version) return dv + " (current)";
+          return dv;
+        },
+
+        // Returns 'install' | 'update' | 'reinstall' | 'downgrade' for the currently
+        // selected version, relative to what's installed locally.
+        versionStatus(app) {
+          const target = app.selectedVersion ? app.selectedVersion.version : app.version;
+          if (!app.installed) return "install";
+          const cmp = this.compareSemver(target, app.installedVersion);
+          if (cmp > 0) return "update";
+          if (cmp < 0) return "downgrade";
+          return "reinstall";
+        },
+
+        actionLabel(app, busy) {
+          const status = this.versionStatus(app);
+          const v = app.selectedVersion ? app.selectedVersion.version : app.version;
+          if (busy) {
+            switch (status) {
+              case "install": return "Installing\u2026";
+              case "update": return "Updating\u2026";
+              case "downgrade": return "Downgrading\u2026";
+            }
+          }
+          const dv = this.displayVersion(v);
+          switch (status) {
+            case "install": return `Install ${dv}`;
+            case "update": return `Update to ${dv}`;
+            case "downgrade": return `Downgrade to ${dv}`;
+          }
+          return "";
+        },
+
+        // Build the JSON payload posted to /download.cgi from the selected version,
+        // stripping client-only fields to keep the URL small.
+        buildDownloadPayload(app) {
+          const triple = app.selectedVersion || { binary: app.binary, md5: app.md5, version: app.version };
+          const payload = Object.assign({}, app, {
+            binary: triple.binary,
+            md5: triple.md5,
+            version: triple.version,
+            description: "",
+          });
+          delete payload.previous_versions;
+          delete payload.allVersions;
+          delete payload.selectedVersion;
+          delete payload.installedVersion;
+          return payload;
+        },
+
+        dispatchAction(app, status) {
+          if (app.busy) return;
+          app.busy = true;
+          const base64 = btoa(JSON.stringify(this.buildDownloadPayload(app)));
+          const updatePrefix = status === "install" ? "" : "update=T&";
+          window.location = `/download.cgi?${updatePrefix}json=${base64}`;
+        },
+
+        performAction(uuid) {
+          const app = this.apps.find((a) => a.uuid === uuid);
+          if (!app || app.busy) return;
+          const status = this.versionStatus(app);
+          if (status === "downgrade") {
+            this.uuidToDowngrade = uuid;
+            this.downgradeFromVersion = app.installedVersion;
+            this.downgradeToVersion = app.selectedVersion ? app.selectedVersion.version : app.version;
+            this.showDowngradeModal = true;
+            return;
+          }
+          this.dispatchAction(app, status);
+        },
+
+        confirmDowngradeNow() {
+          const app = this.apps.find((a) => a.uuid === this.uuidToDowngrade);
+          this.showDowngradeModal = false;
+          if (!app) return;
+          this.dispatchAction(app, "downgrade");
         },
 
         normalizeTaxonomyValues(value) {
@@ -318,25 +482,6 @@
           return this.apps.filter((app) => this.matchesSelectedFilters(app));
         },
 
-        // Download a remote app
-        download(uuid) {
-          const selectedApp = this.apps.find((app) => app.uuid === uuid);
-          if (!selectedApp) {
-            console.error("App not found for UUID:", uuid);
-            return;
-          }
-          // Prevent multiple clicks
-          if (selectedApp.busy) return;
-          selectedApp.busy = true;
-          // Prepare JSON
-          selectedApp.description = ""; // Clear description to avoid size issues
-          const jsonStr = JSON.stringify(selectedApp);
-          // Base64 encode
-          const base64 = btoa(jsonStr);
-          // Redirect
-          window.location = `/download.cgi?json=${base64}`;
-        },
-
         // Trigger the modal for a specific UUID
         confirmRemove(uuid) {
           this.uuidToDelete = uuid;
@@ -349,26 +494,6 @@
           if (this.uuidToDelete) {
             window.location = `/mngr_deleteapp.cgi?uuid=${encodeURIComponent(this.uuidToDelete)}`;
           }
-        },
-
-        // Update
-        confirmUpdate(uuid) {
-          console.log('Updating app with uuid:', uuid);
-          const selectedApp = this.apps.find((app) => app.uuid === uuid);
-          if (!selectedApp) {
-            console.error("App not found for UUID:", uuid);
-            return;
-          }
-          // Prevent multiple clicks
-          if (selectedApp.busy) return;
-          selectedApp.busy = true;
-          // Prepare JSON
-          selectedApp.description = ""; // Clear description to avoid size issues
-          const jsonStr = JSON.stringify(selectedApp);
-          // Base64 encode
-          const base64 = btoa(jsonStr);
-          // Redirect
-          window.location = `/download.cgi?update=T&json=${base64}`;
         },
 
         // Confirm launch
@@ -440,8 +565,9 @@
     </div>
     <h2>Available Apps</h2>
     <p>
-      Browse the micro-firmwares available for your device. Use <strong>Download</strong> to install a new app, or
-      <strong>Update</strong> when a newer version is available.
+      Browse the micro-firmwares available for your device. The action button installs the
+      selected version &mdash; the latest is picked by default, but you can choose an older
+      version from the dropdown when one is offered.
     </p>
     <p>
       Use <strong>Launch</strong> to start an installed app. To return to this menu later, press the <strong>SELECT</strong>
@@ -564,7 +690,27 @@
           <div class="pure-u-1 pure-u-md-2-3 app-details">
             <!-- App Name -->
             <h3 x-text="app.name"></h3>
-            <h4 x-text="app.version"></h4>
+            <h4>
+              <span x-text="displayVersion(app.selectedVersion ? app.selectedVersion.version : app.version)"></span>
+              <template x-if="app.installed && app.installedVersion && app.selectedVersion && app.installedVersion !== app.selectedVersion.version">
+                <span class="installed-version-note" x-text="'(installed: ' + displayVersion(app.installedVersion) + ')'"></span>
+              </template>
+            </h4>
+            <!-- Version selector: only when more than one version is published -->
+            <template x-if="app.allVersions && app.allVersions.length > 1">
+              <div class="version-selector">
+                <label :for="'version-' + app.uuid">Version:</label>
+                <select :id="'version-' + app.uuid"
+                        :disabled="app.busy"
+                        @change="onVersionChange(app, $event.target.value)">
+                  <template x-for="(v, idx) in app.allVersions" :key="v.version">
+                    <option :value="v.version"
+                            :selected="app.selectedVersion && app.selectedVersion.version === v.version"
+                            x-text="versionOptionLabel(app, v, idx)"></option>
+                  </template>
+                </select>
+              </div>
+            </template>
             <!-- App Description -->
             <p x-html="app.description"></p>
             <!-- Combined Tags in one line -->
@@ -586,18 +732,14 @@
 
           <!-- Right-hand side: Buttons (1/6 on md) -->
           <div class="pure-u-1 pure-u-md-1-6 app-actions">
-            <!-- Download button: only visible if not installed -->
-            <button class="pure-button pure-button-primary" x-show="!app.installed" :disabled="app.busy"
-              @click="download(app.uuid)">
-              <span x-show="!app.busy">Download</span>
-              <span x-show="app.busy">Downloading…</span>
-            </button>
-
-            <!-- Update button: only visible if app.update is true -->
-            <button class="pure-button" x-show="app.update" :disabled="app.busy" @click="confirmUpdate(app.uuid)">
-              <span x-show="!app.busy">Update</span>
-              <span x-show="app.busy">Updating…</span>
-            </button>
+            <!-- Dynamic action button: Install / Update / Downgrade. Hidden when the
+                 selected version is already installed (status === 'reinstall'). -->
+            <button class="pure-button pure-button-primary"
+                    :class="{ 'button-downgrade': versionStatus(app) === 'downgrade' }"
+                    :disabled="app.busy"
+                    x-show="versionStatus(app) !== 'reinstall'"
+                    @click="performAction(app.uuid)"
+                    x-text="actionLabel(app, app.busy)"></button>
 
             <!-- Launch button: only visible if installed is true -->
             <button class="pure-button" x-show="app.installed" @click="confirmLaunch(app.uuid)">
@@ -632,6 +774,31 @@
 
           <!-- Cancel button -->
           <button class="pure-button" @click="showDeleteModal=false">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Downgrade confirmation modal -->
+    <div class="modal" x-show="showDowngradeModal" x-cloak x-transition>
+      <div class="modal-overlay" @click="showDowngradeModal=false"></div>
+
+      <div class="modal-content">
+        <h3>Confirm Downgrade</h3>
+        <p>
+          You are about to replace the installed version
+          <strong x-text="displayVersion(downgradeFromVersion) || '?'"></strong>
+          with an older version
+          <strong x-text="displayVersion(downgradeToVersion) || '?'"></strong>.
+        </p>
+        <p>Older versions may lack features or fixes from the current release. Continue?</p>
+
+        <div class="modal-buttons">
+          <button class="pure-button button-downgrade" @click="confirmDowngradeNow()">
+            Yes, Downgrade
+          </button>
+          <button class="pure-button" @click="showDowngradeModal=false">
             Cancel
           </button>
         </div>

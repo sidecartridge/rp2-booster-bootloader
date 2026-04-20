@@ -19,6 +19,9 @@ This is an advanced second-stage bootloader for the Raspberry Pi Pico W and the 
 - **Catalog Filters in the Apps View**  
   Narrow the public app catalog dynamically with Platform and Features filters so it is easier to find the right microfirmware.  
 
+- **Per-App Version Selector**  
+  Pick which version of a microfirmware to install. The latest is selected by default, but when the publisher exposes prior versions in the catalog you can roll back or pin to a known-good build, with a confirmation step for downgrades.  
+
 - **Offline-Capable Manager**  
   If Booster cannot connect to the configured WiFi network after its retry cycle, it stays usable in offline mode so already-downloaded microfirmwares can still be launched from the Atari ST terminal path.  
 
@@ -272,8 +275,10 @@ Each app shows the following information:
 - **Features**: A list of features supported by the app as a taxonomy.
 - **Computer**: The computers supported by the app as a taxonomy.
 
+If the catalog publishes more than one version of an app, a **Version** dropdown appears under the app name. The latest version is selected by default; older versions, when available, are listed in semantic-version order. The currently installed version is tagged "(current)" when it is not the latest.
+
 At the right hand side of each app, you can see the following buttons:
-- **Download**: Download the app from the public repository to the micro SD card. But it does not launch it yet.
+- **Install vX / Update to vX / Downgrade to vX**: A single context-aware action button that installs the version selected in the dropdown. Its label and color reflect what the action will do relative to what is already installed. The button is hidden when the selected version is the one already installed. Downgrading to an older version requires an extra confirmation.
 - **Delete**: Delete the app from the device microSD card. You can download the app again if you want to.
 
 ![Booster Manager Apps View 2](/docs/BOOSTER-MANAGER-APPS-2.png)

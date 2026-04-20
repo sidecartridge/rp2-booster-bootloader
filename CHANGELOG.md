@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.2.0 (2026-04-20) - release
+
+This release lets users pick which version of a microfirmware to install, including older ones when the publisher keeps them online.
+
+### Changes
+- Replace the Download/Update buttons on the Apps page with a single context-aware action button (Install / Update / Downgrade).
+
+### New features
+- Add an optional `previous_versions` array to entries in `apps.json`, backwards compatible with existing catalogs.
+- Add a per-app version selector defaulting to the latest, with downgrades requiring an explicit confirmation.
+
+### Fixes
+- Compare versions using a semantic-version comparator instead of string equality.
+
+---
+
 ## v2.1.0 (2026-03-24) - release
 
 This release delivers a smoother overall user experience, with a cleaner Manager interface on both the Atari ST screen and the web UI, better behavior when WiFi is unavailable, fixes for some network issues in weak WiFi environments, and major flash-usage optimizations behind the scenes.

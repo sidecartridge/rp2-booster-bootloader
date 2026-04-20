@@ -35,26 +35,34 @@
             ],
             "binary": "https://tosemulator.sidecartridge.com/SWITCHER.TOS.v2.1.0",
             "md5": "e571e9873a3703a787884727d864f213",
-            "version": "2.0.0"
-        },
-        {
-            "uuid": "7a4ac96a-6aae-4d2b-913c-2c95893af591",
-            "name": "ROM Emulator",
-            "description": "Pure raw emulation of ROMs with a maximum of 128KBs. It can load any ROM file from the SD card or download it from the public repository in the net.",
-            "image": "https://placehold.co/256x256/png",
-            "tags": [
-                "Emulation",
-                "ROM"
-            ],
-            "devices": [
-                "Atari ST",
-                "Atari STE",
-                "Atari MegaST",
-                "Atari MegaSTE"
-            ],
-            "binary": "https://tosemulator.sidecartridge.com/SWITCHER.TOS.v2.1.0",
-            "md5": "e571e9873a3703a787884727d864f213",
-            "version": "2.0.0"
+            "version": "v2.1.2",
+            "previous_versions": [
+                {
+                    "version": "v2.1.1",
+                    "binary": "https://atarist.sidecartridge.com/ed70ef7b-3538-43c8-8957-4d9fa4e7736c-v2.1.1.uf2",
+                    "md5": "6497b90284ffb0a03e6a0565f246fd72"
+                },
+                {
+                    "version": "v2.1.0",
+                    "binary": "https://atarist.sidecartridge.com/ed70ef7b-3538-43c8-8957-4d9fa4e7736c-v2.1.0.uf2",
+                    "md5": "44cc4c0a30219cca5bab8c6316bedeb4"
+                },
+                {
+                    "version": "v2.0.2",
+                    "binary": "https://atarist.sidecartridge.com/ed70ef7b-3538-43c8-8957-4d9fa4e7736c-v2.0.2.uf2",
+                    "md5": "e43027c450be26591d45dca2e70a4d10c"
+                }
+                {
+                    "version": "v2.0.1",
+                    "binary": "https://atarist.sidecartridge.com/ed70ef7b-3538-43c8-8957-4d9fa4e7736c-v2.0.1.uf2",
+                    "md5": "f85535d4076ff7633989e54eacaa154c"
+                }
+                {
+                    "version": "v2.0.0",
+                    "binary": "https://atarist.sidecartridge.com/ed70ef7b-3538-43c8-8957-4d9fa4e7736c-v2.0.0.uf2",
+                    "md5": "2f4816abd8e65315a2b917b73361aac3"
+                }
+            ]
         },
         {
             "uuid": "c698d797-d0e0-46b7-9347-df42a5d64ad0",
@@ -73,7 +81,19 @@
             ],
             "binary": "hhttps://tosemulator.sidecartridge.com/SWITCHER.TOS.v2.1.0",
             "md5": "e571e9873a3703a787884727d864f213",
-            "version": "2.0.0"
+            "version": "2.0.0",
+            "previous_versions": [
+                {
+                    "version": "1.5.2",
+                    "binary": "https://tosemulator.sidecartridge.com/GEMDRIVE.v1.5.2",
+                    "md5": "e571e9873a3703a787884727d864f213"
+                },
+                {
+                    "version": "1.0.0-rc1",
+                    "binary": "https://tosemulator.sidecartridge.com/GEMDRIVE.v1.0.0-rc1",
+                    "md5": "e571e9873a3703a787884727d864f213"
+                }
+            ]
         },
         {
             "uuid": "5da89c11-83f1-4e31-aa2e-44237ef9fabb",
@@ -111,7 +131,8 @@
             ],
             "binary": "https://tosemulator.sidecartridge.com/SWITCHER.TOS.v2.1.0",
             "md5": "e571e9873a3703a787884727d864f213",
-            "version": "2.0.0"
+            "version": "2.0.0",
+            "previous_versions": []
         },
         {
             "uuid": "5da89c11-83f1-4e31-aa2e-44237ef9fabd",
