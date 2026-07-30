@@ -70,7 +70,36 @@ static void internal_result_fn(void *arg, httpc_result_t httpc_result,
   }
 }
 
-#if BOOSTER_DOWNLOAD_HTTPS == 1
+// Classify a URL scheme. Returns 1 for https, 0 for http, -1 for anything
+// else. Case-insensitive, matching how browsers treat schemes.
+int httpc_scheme_is_https(const char *protocol) {
+  if (protocol == NULL) {
+    return -1;
+  }
+  if (strcasecmp(protocol, "https") == 0) {
+    return 1;
+  }
+  if (strcasecmp(protocol, "http") == 0) {
+    return 0;
+  }
+  return -1;
+}
+
+// One TLS config shared by every https request for the lifetime of the
+// process. Creating one per download churns the heap and leaks whenever an
+// error path forgets the matching free; the config holds no per-connection
+// state, so a single instance is correct. Never freed by design.
+struct altcp_tls_config *httpc_shared_tls_config(void) {
+  static struct altcp_tls_config *shared_config = NULL;
+  if (shared_config == NULL) {
+    shared_config = altcp_tls_create_config_client(NULL, 0);
+    if (shared_config == NULL) {
+      HTTP_ERROR("Failed to create shared TLS config\n");
+    }
+  }
+  return shared_config;
+}
+
 // Override altcp_tls_alloc to set sni
 static struct altcp_pcb *altcp_tls_alloc_sni(void *arg, u8_t ip_type) {
   assert(arg);
@@ -78,17 +107,15 @@ static struct altcp_pcb *altcp_tls_alloc_sni(void *arg, u8_t ip_type) {
   struct altcp_pcb *pcb = altcp_tls_alloc(req->tls_config, ip_type);
   if (!pcb) {
     HTTP_ERROR("Failed to allocate PCB\n");
-    sie return NULL;
+    return NULL;
   }
   mbedtls_ssl_set_hostname(altcp_tls_context(pcb), req->hostname);
   return pcb;
 }
-#endif
 
 // Make a http request, complete when req->complete returns true
 int http_client_request_async(async_context_t *context, HTTPC_REQUEST_T *req) {
   uint16_t default_port = 80;
-#if BOOSTER_DOWNLOAD_HTTPS == 1
   // Establish TCP + TLS connection with server
 #ifdef MBEDTLS_DEBUG_C
   mbedtls_debug_set_threshold(PICOHTTPS_MBEDTLS_DEBUG_LEVEL);
@@ -102,12 +129,14 @@ int http_client_request_async(async_context_t *context, HTTPC_REQUEST_T *req) {
       req->tls_allocator.arg = req;
     }
     req->settings.altcp_allocator = &req->tls_allocator;
+  } else {
+    // A reused request struct may carry the allocator from a previous
+    // https request; a plain-http request must not inherit it.
+    req->settings.altcp_allocator = NULL;
   }
-#endif
 #endif
 
   req->complete = false;
-  req->headers_fn = http_client_header_print_fn;
   req->settings.headers_done_fn = req->headers_fn ? internal_header_fn : NULL;
   req->settings.result_fn = internal_result_fn;
   async_context_acquire_lock_blocking(context);

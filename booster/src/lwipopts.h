@@ -41,7 +41,12 @@
 #define LWIP_ICMP 1
 #define LWIP_RAW 1
 #define TCP_MSS 1460
-#define TCP_WND (12 * TCP_MSS)
+// TLS peers send records up to 16KB, and altcp_tls only acks a record's bytes
+// once the whole record has arrived, so the receive window must exceed a full
+// record plus lwIP's window-update thresholds. With 12*MSS the sender stalls a
+// few hundred bytes short of completing a 16KB record and the transfer dies in
+// zero-window probes; 20*MSS leaves ~12KB of margin.
+#define TCP_WND (20 * TCP_MSS)
 #define TCP_SND_BUF (8 * TCP_MSS)
 
 // #define TCP_WND (6 * TCP_MSS)
@@ -147,17 +152,24 @@
 
 #define HTTPD_FSDATA_FILE "fsdata_srv.c"
 
-#if BOOSTER_DOWNLOAD_HTTPS == 1
-// If you don't want to use TLS (just a http request) you can avoid linking to
-// mbedtls and remove the following
+// ALTCP + TLS are always compiled in. Plain http still works: an http request
+// simply runs through ALTCP with no TLS layer attached, so one build serves
+// both schemes and the transport is chosen per request from the URL.
 #define LWIP_ALTCP 1
 #define MEMP_NUM_ALTCP_PCB 10
 #define LWIP_ALTCP_TLS 1
 #define LWIP_ALTCP_TLS_MBEDTLS 1
+// TRUST MODEL (decision D-01, phase A): encryption only, NOT authentication.
+// VERIFY_NONE means no certificate chain is checked, so an HTTPS download is
+// protected against passive eavesdropping but NOT against an active
+// man-in-the-middle. Two things block verification today: there is no CA
+// bundle on the device, and there is no wall clock (constraint C-02,
+// MBEDTLS_HAVE_TIME_DATE off) so certificate validity periods are uncheckable.
+// Phase B would add a CA store for sidecartridge.com hosts, VERIFY_REQUIRED,
+// and a time source. Do not describe this as "secure" in user-facing text.
 #define ALTCP_MBEDTLS_AUTHMODE MBEDTLS_SSL_VERIFY_NONE
 // #define ALTCP_MBEDTLS_DEBUG  LWIP_DBG_ON
 // #define ALTCP_MBEDTLS_LIB_DEBUG LWIP_DBG_ON
-#endif
 
 // Note bug in lwip with LWIP_ALTCP and LWIP_DEBUG
 // https://savannah.nongnu.org/bugs/index.php?62159

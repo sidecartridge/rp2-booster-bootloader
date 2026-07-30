@@ -160,6 +160,18 @@ static int parse_url(const char *url, url_components_t *components) {
     components->uri[1] = '\0';
   }
 
+  // Split an explicit port off the host ("host:8080"); 0 means "use the
+  // scheme default", which httpc resolves to 80 or 443.
+  char *port_sep = strchr(components->host, ':');
+  if (port_sep != NULL) {
+    unsigned long parsed = strtoul(port_sep + 1, NULL, 10);
+    if (parsed == 0 || parsed > UINT16_MAX) {
+      return -1;  // Malformed port
+    }
+    components->port = (uint16_t)parsed;
+    *port_sep = '\0';
+  }
+
   return 0;  // Success
 }
 
@@ -472,11 +484,9 @@ static err_t http_client_receive_file_fn(__unused void *arg,
     }
   }
 
-#if BOOSTER_DOWNLOAD_HTTPS == 1
+  // ALTCP is always enabled; altcp_recved is correct for plain http too
+  // (an http connection is just an ALTCP layer with no TLS attached).
   altcp_recved(conn, p->tot_len);
-#else
-  tcp_recved(conn, p->tot_len);
-#endif
   pbuf_free(p);
 
   if (download_type == DOWNLOAD_TYPE_FIRMWARE)
@@ -490,10 +500,13 @@ static err_t http_client_receive_file_fn(__unused void *arg,
 static err_t http_client_header_check_size_fn(
     __unused httpc_state_t *connection, __unused void *arg, struct pbuf *hdr,
     u16_t hdr_len, __unused u32_t content_len) {
-  size_t max_allowed =
-      (download_type == DOWNLOAD_TYPE_FIRMWARE)
-          ? MAXIMUM_APP_UF2_SIZE
-          : MAXIMUM_APP_INFO_SIZE;  // or another cap for app files
+  // Both branches download a .uf2: the firmware path fetches the full-image
+  // upgrade.bin, the app path fetches a single microfirmware. (Before v2.3.0
+  // this ternary read APP_UF2_SIZE / APP_INFO_SIZE, which capped the firmware
+  // at a microfirmware's size and every app at 4KB of JSON. It never ran.)
+  size_t max_allowed = (download_type == DOWNLOAD_TYPE_FIRMWARE)
+                           ? MAXIMUM_FIRMWARE_UF2_SIZE
+                           : MAXIMUM_APP_UF2_SIZE;
 
   char buf[512];
   u16_t copy = hdr_len < sizeof(buf) - 1 ? hdr_len : (sizeof(buf) - 1);
@@ -1441,14 +1454,18 @@ static FRESULT __not_in_flash_func(storeUF2FileToFlash)(const char *filename,
   DPRINTF("Erased %u bytes of flash at offset 0x%X\n", (unsigned int)flashSize,
           offset);
 
-  // We allocate a dynamic buffer of size userPageSize.
-  // We'll fill it with multiple UF2 block payloads.
-  uint8_t *accumBuf = (uint8_t *)malloc(userPageSize);
-  if (!accumBuf) {
-    DPRINTF("Error: Unable to allocate %u bytes for accumBuf.\n", userPageSize);
+  // Static staging buffer, deliberately not malloc'd -- see
+  // APP_FLASH_COPY_CHUNK_SIZE in appmngr.h for why (heap fragmentation at
+  // launch time made a large contiguous allocation unreliable, and
+  // PICO_MALLOC_PANIC turns that into a panic rather than a recoverable NULL).
+  static uint8_t accumBufStorage[APP_FLASH_COPY_CHUNK_SIZE];
+  if (userPageSize > sizeof(accumBufStorage)) {
+    DPRINTF("Chunk size %u exceeds the %u byte staging buffer\n", userPageSize,
+            (unsigned)sizeof(accumBufStorage));
     f_close(&file);
-    return FR_INT_ERR;
+    return FR_INVALID_PARAMETER;
   }
+  uint8_t *accumBuf = accumBufStorage;
 
   // We'll keep track of how many bytes we have in accumBuf.
   uint32_t accumUsed = 0;
@@ -1566,7 +1583,7 @@ static FRESULT __not_in_flash_func(storeUF2FileToFlash)(const char *filename,
     }
   }
 
-  free(accumBuf);
+  // accumBuf is static storage, not heap: nothing to free.
   f_close(&file);
 
   return FR_OK;
@@ -1715,7 +1732,7 @@ download_launch_err_t appmngr_launch_app() {
     int res = storeUF2FileToFlash(
         binary_filename, (uint32_t)&_storage_flash_start,
         (uint32_t)&__flash_binary_start - (uint32_t)&_storage_flash_start,
-        FLASH_BLOCK_SIZE);
+        APP_FLASH_COPY_CHUNK_SIZE);
   } else {
     DPRINTF("Development app launched\n");
   }
@@ -1826,21 +1843,36 @@ download_err_t appmngr_start_download(const char *url) {
   snprintf(request_host_buf, sizeof(request_host_buf), "%s", components.host);
   snprintf(request_uri_buf, sizeof(request_uri_buf), "%s", components.uri);
 
+  // Decide the transport from the URL scheme, per request. Only http and
+  // https are supported.
+  int use_https = httpc_scheme_is_https(components.protocol);
+  if (use_https < 0) {
+    DPRINTF("Unsupported URL scheme: %s\n", components.protocol);
+    return DOWNLOAD_CANNOTPARSEURL_ERROR;
+  }
+
   request = (HTTPC_REQUEST_T){0};
   request.complete = false;
   request.hostname = request_host_buf;
   request.url = request_uri_buf;
-  DPRINTF("HOST: %s. URI: %s\n", components.host, components.uri);
+  request.port = components.port;  // 0 lets httpc pick 80 or 443
+  DPRINTF("HOST: %s. PORT: %u. URI: %s\n", components.host, components.port,
+          components.uri);
   request.headers_fn = http_client_header_check_size_fn;
   request.recv_fn = http_client_receive_file_fn;
   request.result_fn = http_client_result_complete_fn;
   DPRINTF("Downloading app binary: %s\n", request.url);
-#if BOOSTER_DOWNLOAD_HTTPS == 1
-  request.tls_config = altcp_tls_create_config_client(NULL, 0);  // https
-  DPRINTF("Download with HTTPS\n");
-#else
-  DPRINTF("Download with HTTP\n");
-#endif
+  if (use_https) {
+    request.tls_config = httpc_shared_tls_config();
+    if (request.tls_config == NULL) {
+      DPRINTF("Cannot initialize HTTPS\n");
+      return DOWNLOAD_CANNOTSTARTDOWNLOAD_ERROR;
+    }
+    DPRINTF("Download with HTTPS\n");
+  } else {
+    request.tls_config = NULL;
+    DPRINTF("Download with HTTP\n");
+  }
   int result = http_client_request_async(cyw43_arch_async_context(), &request);
   if (result != 0) {
     DPRINTF("Error initializing the download app binary: %i\n", result);
@@ -1848,12 +1880,7 @@ download_err_t appmngr_start_download(const char *url) {
     if (res != FR_OK) {
       DPRINTF("Error closing file %s: %i\n", filename, res);
     }
-#if BOOSTER_DOWNLOAD_HTTPS == 1
-    if (request.tls_config) {
-      altcp_tls_free_config(request.tls_config);
-      request.tls_config = NULL;
-    }
-#endif
+    request.tls_config = NULL;  // shared config, not ours to free
     return DOWNLOAD_CANNOTSTARTDOWNLOAD_ERROR;
   }
   return DOWNLOAD_OK;
@@ -1917,9 +1944,9 @@ download_err_t appmngr_finish_download_app() {
   }
   DPRINTF("Downloaded.\n");
 
-#if BOOSTER_DOWNLOAD_HTTPS == 1
-  altcp_tls_free_config(request.tls_config);
-#endif
+  // The TLS config is shared process-wide and outlives this download; just
+  // drop our reference.
+  request.tls_config = NULL;
 
   if (download_status != DOWNLOAD_STATUS_COMPLETED) {
     DPRINTF("Error downloading app binary: %i\n", download_status);
@@ -1942,13 +1969,21 @@ download_err_t appmngr_finish_download_app() {
 
   memcpy(app_info.file_md5_digest, md5_ctx.digest,
          sizeof(app_info.file_md5_digest));
-  appmngr_debug_log_md5("MD5 hash of downloaded file",
-                        app_info.file_md5_digest,
+  appmngr_debug_log_md5("MD5 hash of downloaded file", app_info.file_md5_digest,
                         sizeof(app_info.file_md5_digest));
   appmngr_debug_log_md5("MD5 hash of app info", app_info.md5,
                         sizeof(app_info.md5));
 
-  // Compare the MD5 hash with the one in the app info
+  // Compare the MD5 hash with the one in the app info.
+  //
+  // This is an INTEGRITY check, not an authenticity one: it proves the bytes we
+  // wrote match what the catalog said to expect, so it catches truncation and
+  // corruption. It is not a signature. The expected hash arrives from the same
+  // catalog, over the same connection, as the binary itself, and TLS here is
+  // encryption-only (ALTCP_MBEDTLS_AUTHMODE = VERIFY_NONE, decision D-01), so
+  // an attacker able to substitute the download can substitute the hash with
+  // it. Real authenticity needs D-01 phase B (verified certificates) or a
+  // signed catalog.
   if (memcmp(app_info.md5, app_info.file_md5_digest, sizeof(app_info.md5)) !=
       0) {
     DPRINTF("MD5 hash mismatch\n");
@@ -2060,9 +2095,9 @@ download_err_t appmngr_finish_download_firmware() {
   }
   DPRINTF("Downloaded.\n");
 
-#if BOOSTER_DOWNLOAD_HTTPS == 1
-  altcp_tls_free_config(request.tls_config);
-#endif
+  // The TLS config is shared process-wide and outlives this download; just
+  // drop our reference.
+  request.tls_config = NULL;
 
   download_firmware_status = DOWNLOAD_STATUS_COMPLETED;
   download_firmware_error = DOWNLOAD_OK;
@@ -2169,12 +2204,7 @@ void appmngr_deinit(void) {
   if (file.obj.fs) {
     f_close(&file);
   }
-#if BOOSTER_DOWNLOAD_HTTPS == 1
-  if (request.tls_config) {
-    altcp_tls_free_config(request.tls_config);
-    request.tls_config = NULL;
-  }
-#endif
+  request.tls_config = NULL;  // shared config, not ours to free
 
   sdcard_info = (sdcard_info_t){false, 0, 0, false};
   app_info = (app_info_t){0};

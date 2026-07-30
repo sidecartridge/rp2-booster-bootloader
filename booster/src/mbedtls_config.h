@@ -7,13 +7,26 @@
 #define MBEDTLS_NO_PLATFORM_ENTROPY
 #define MBEDTLS_ENTROPY_HARDWARE_ALT
 
-#define MBEDTLS_SSL_MAX_CONTENT_LEN 4096 // Default is often 16384
+// Asymmetric TLS record buffers. The IN buffer MUST be the full 16KB: TLS
+// peers send records up to 16KB (real servers do, for both certificate chains
+// and data), and mbedTLS cannot receive a record larger than this buffer --
+// with 4KB the handshake dies on real certificate chains and data transfer
+// hangs on 16KB records. The OUT buffer stays small: our requests are tiny.
+// Costs ~16KB heap per TLS session; only one session runs at a time.
 #define MBEDTLS_SSL_RENEGOTIATION 0
-#define MBEDTLS_SSL_IN_CONTENT_LEN 4096
+#define MBEDTLS_SSL_IN_CONTENT_LEN 16384
 #define MBEDTLS_SSL_OUT_CONTENT_LEN 4096
 
 #define MBEDTLS_ALLOW_PRIVATE_ACCESS
+// MBEDTLS_HAVE_TIME is required to compile the SDK's altcp_tls_mbedtls.c
+// (mbedtls_ssl_session.start only exists with it). Millisecond time comes from
+// mbedtls_ms_time.c (time since boot). There is still NO wall-clock source:
+// MBEDTLS_HAVE_TIME_DATE stays off, so certificate validity periods cannot be
+// checked (constraint C-02, decision D-01).
 #define MBEDTLS_HAVE_TIME
+#define MBEDTLS_PLATFORM_C
+// The app provides mbedtls_ms_time() (mbedtls_ms_time.c, ms since boot)
+#define MBEDTLS_PLATFORM_MS_TIME_ALT
 
 // Symmetric ciphers
 #define MBEDTLS_CIPHER_MODE_CBC                     // Cipher block chaining
@@ -67,7 +80,8 @@
 #define MBEDTLS_SSL_EXTENDED_MASTER_SECRET          // TLS extension (RFC 7627)
 #define MBEDTLS_SSL_MAX_FRAGMENT_LENGTH             // TLS extension (RFC 6066)
 #define MBEDTLS_SSL_SERVER_NAME_INDICATION          // TLS extension (RFC 6066)
-#define MBEDTLS_SSL_TRUNCATED_HMAC                  // TLS extension (RFC 6066)
+// MBEDTLS_SSL_TRUNCATED_HMAC was removed in Mbed TLS 3.0 (this tree ships
+// 3.6.2); leaving it defined is a hard #error in check_config.h.
 
 // Protocols
 #define MBEDTLS_SSL_PROTO_TLS1_2                    // Enable TLS version 1.2

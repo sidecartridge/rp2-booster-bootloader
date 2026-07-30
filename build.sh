@@ -35,6 +35,17 @@ case "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" in
 esac
 echo "Upgrader build type: $UPGRADER_BUILD_TYPE"
 
+# Booster is built MinSizeRel for release flows (decision D-04). With -O3 and
+# HTTPS enabled, Booster overflows its 768K slot by ~48KB and will not link;
+# -Os saves ~87KB and brings it to ~90% of the slot. Debug builds are unaffected.
+export BOOSTER_BUILD_TYPE=$BUILD_TYPE
+case "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" in
+    release|minsizerel)
+        export BOOSTER_BUILD_TYPE=MinSizeRel
+        ;;
+esac
+echo "Booster build type: $BOOSTER_BUILD_TYPE"
+
 # Set the build directory. Delete previous contents if any
 echo "Delete previous build directory"
 rm -rf build
@@ -55,11 +66,11 @@ cd ../..
 # Build the booster project
 echo "Building booster project"
 cd booster
-./build.sh $BOARD_TYPE $BUILD_TYPE
-if [ "$BUILD_TYPE" = "release" ]; then
+./build.sh $BOARD_TYPE $BOOSTER_BUILD_TYPE
+if [ "$BOOSTER_BUILD_TYPE" = "release" ]; then
     cp  ./dist/booster-$BOARD_TYPE.uf2 ../build/booster.uf2
 else
-    cp  ./dist/booster-$BOARD_TYPE-$BUILD_TYPE.uf2 ../build/booster.uf2
+    cp  ./dist/booster-$BOARD_TYPE-$BOOSTER_BUILD_TYPE.uf2 ../build/booster.uf2
 fi
 cd ..
 

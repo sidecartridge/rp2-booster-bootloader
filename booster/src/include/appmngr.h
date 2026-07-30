@@ -30,14 +30,60 @@
 #include "reset.h"
 #include "sdcard.h"
 
-// Macro for maximum allowed size
-#define MAXIMUM_APP_UF2_SIZE 1048576  // Example: 1 MB
+// Sanity caps on Content-Length, checked before we start writing a download to
+// the SD card.
+//
+// A UF2 carries 256 payload bytes in each 512-byte block, so a .uf2 is about
+// twice the size of the binary it holds, plus a little framing (the observed
+// upgrade.bin is 512 bytes over exactly 2x).
+//
+// NOTE: these caps were dead code until v2.3.0 -- httpc.c unconditionally
+// overwrote the headers callback that enforces them, so no download was ever
+// size-checked and both values were wrong without anyone noticing.
+#define UF2_OVERHEAD_FACTOR 2
+#define UF2_FRAMING_SLACK (64 * 1024)
+
+// A downloaded microfirmware .uf2 can at most fill the 1152K microfirmware
+// slot (STORAGE_FLASH in memmap_booster.ld).
+#define MAXIMUM_APP_UF2_SIZE \
+  ((1152 * 1024 * UF2_OVERHEAD_FACTOR) + UF2_FRAMING_SLACK)
+
+// A downloaded Booster upgrade.bin is the FULL-image .uf2 (placeholder plus
+// Booster core, 3,932,672 bytes as of v2.2.0) -- far larger than any single
+// microfirmware, so it needs its own cap. Bound it by the whole flash
+// expressed as UF2 so the value survives changes to the image layout.
+#define MAXIMUM_FIRMWARE_UF2_SIZE \
+  ((PICO_FLASH_SIZE_BYTES * UF2_OVERHEAD_FACTOR) + UF2_FRAMING_SLACK)
 #define MAX_TAGS 6
 #define MAX_DEVICES 6
 
 #define MAXIMUM_APP_INFO_SIZE 4096
 
 #define UF2_BLOCK_SIZE 512
+
+// Chunk size for the UF2 -> flash copy at app launch (storeUF2FileToFlash).
+// Only a batching buffer in front of flash_range_program, which programs
+// 256-byte pages: any multiple of FLASH_PAGE_SIZE writes byte-identical flash
+// contents. One flash sector is a natural granularity (it matches the erase
+// unit) and keeps the buffer small enough to live in bss.
+//
+// The buffer is STATIC, not malloc'd. History of why:
+//   - It used to be the SDK's FLASH_BLOCK_SIZE (64K) from the heap. Once
+//   mbedTLS
+//     grew bss by ~9KB the allocation ran 536 bytes past 0x20030000, into the
+//     ROM_IN_RAM cartridge window, silently corrupting the ROM served to the
+//     Atari. memmap_booster.ld now caps the heap at the stack bottom so the
+//     heap can never reach that window at all.
+//   - With the cap the heap is ~47KB, so 64K could not be allocated anyway, and
+//     even 32K failed at launch: by then the session has run the web server,
+//     parsed catalog JSON, and done a TLS handshake, so a single CONTIGUOUS 32K
+//     block is not obtainable even though the total free heap is larger. malloc
+//     panics rather than returning NULL (PICO_MALLOC_PANIC), so that surfaced
+//     as
+//     "*** PANIC *** Out of memory".
+// A static buffer removes the whole failure class: no allocation, no
+// fragmentation sensitivity, and it leaves the heap free for TLS.
+#define APP_FLASH_COPY_CHUNK_SIZE FLASH_SECTOR_SIZE
 
 // Each lookup table entry is 38 bytes:
 //   - 36 bytes for the UUID
@@ -51,6 +97,9 @@ typedef struct {
   char protocol[16];
   char host[128];
   char uri[256];
+  // Explicit port from a "host:port" URL, or 0 to let the scheme decide
+  // (80 for http, 443 for https).
+  uint16_t port;
 } url_components_t;
 
 typedef struct {

@@ -125,10 +125,6 @@ add_subdirectory(qrcodegen)
 # Add cJSON library
 add_subdirectory(cjson)
 
-# Add HTTP client library
-add_subdirectory(httpc)
-add_dependencies(httpc generate_booster_fsdata)
-
 # Add MD5 library
 add_subdirectory(md5)
 
@@ -171,6 +167,9 @@ target_sources(${PROJECT_NAME} PRIVATE
         dhcpserver/dhcpserver.c
         dnsserver/dnsserver.c)
 
+# mbedTLS needs a monotonic ms clock (MBEDTLS_PLATFORM_MS_TIME_ALT).
+target_sources(${PROJECT_NAME} PRIVATE mbedtls_ms_time.c)
+
 # Create map/bin/hex/uf2 files
 pico_add_extra_outputs(${PROJECT_NAME})
 
@@ -197,10 +196,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     pico_lwip                # lwIP library
     pico_lwip_http           # lwIP httpd library
     pico_lwip_mdns           # lwIP mDNS library
-#    pico_mbedtls             # mbedTLS library
+    pico_lwip_mbedtls        # lwIP ALTCP-over-mbedTLS glue
+    pico_mbedtls             # mbedTLS library
     pico_multicore           # Multicore support
     pico_stdlib              # Core functionality
-    httpc                    # HTTP client
     qrcodegen                # QR code generation library
     settings                 # Custom settings library
     u8g2                     # for display
@@ -226,6 +225,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/include
     ${CMAKE_CURRENT_LIST_DIR}/..
+    ${CMAKE_CURRENT_LIST_DIR}/httpc
     ${CMAKE_CURRENT_LIST_DIR}/dhcpserver
     ${CMAKE_CURRENT_LIST_DIR}/dnsserver)
 
@@ -240,7 +240,6 @@ set(RELEASE_DATE $ENV{RELEASE_DATE})
 set(_DEBUG $ENV{DEBUG_MODE})
 set(DISPLAY_ATARIST $ENV{DISPLAY_ATARIST})
 set(PICO_FLASH_ASSUME_CORE0_SAFE $ENV{PICO_FLASH_ASSUME_CORE0_SAFE})
-set(BOOSTER_DOWNLOAD_HTTPS $ENV{BOOSTER_DOWNLOAD_HTTPS})
 
 # If the environment variables are not set, use default values
 if(NOT DEFINED RELEASE_VERSION)
@@ -272,7 +271,7 @@ if(NOT DEFINED RELEASE_DATE)
 endif()
 
 if (NOT DEFINED _DEBUG)
-        set(_DEBUG 0)
+        set(_DEBUG 1)
 endif()
 
 # Debug outputs
@@ -310,12 +309,6 @@ if (NOT DEFINED ENV{PICO_FLASH_ASSUME_CORE0_SAFE})
 endif()
 add_definitions(-DPICO_FLASH_ASSUME_CORE0_SAFE=$ENV{PICO_FLASH_ASSUME_CORE0_SAFE})
 
-# Select HTTPS or HTTP downloads of the firmware
-if (NOT DEFINED ENV{BOOSTER_DOWNLOAD_HTTPS})
-    set(ENV{BOOSTER_DOWNLOAD_HTTPS} "0")
-endif()
-add_definitions(-DBOOSTER_DOWNLOAD_HTTPS=$ENV{BOOSTER_DOWNLOAD_HTTPS})
-
 # PICO_DEOPTIMIZE_DEBUG is used to disable optimizations in debug mode
 #if (NOT DEFINED ENV{PICO_DEOPTIMIZE_DEBUG})
 #    set(ENV{PICO_DEOPTIMIZE_DEBUG} "1")
@@ -333,7 +326,6 @@ message(STATUS "RELEASE_DATE: " ${RELEASE_DATE})
 message(STATUS "DEBUG_MODE: " ${_DEBUG})
 message(STATUS "LATEST_RELEASE_URL: " ${LATEST_RELEASE_URL})
 message(STATUS "DISPLAY_ATARIST: " ${DISPLAY_ATARIST})
-message(STATUS "BOOSTER_DOWNLOAD_HTTPS: " ${BOOSTER_DOWNLOAD_HTTPS})
 message(STATUS "PICO_FLASH_ASSUME_CORE0_SAFE: " ${PICO_FLASH_ASSUME_CORE0_SAFE})
 message(STATUS "PICO_USE_FASTEST_SUPPORTED_CLOCK: " ${PICO_USE_FASTEST_SUPPORTED_CLOCK})
 #message(STATUS "PICO_DEOPTIMIZE_DEBUG: $ENV{PICO_DEOPTIMIZE_DEBUG}")

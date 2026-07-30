@@ -290,12 +290,26 @@ SECTIONS
 
 
 
-    /* stack limit is poorly named, but historically is maximum heap ptr */
-    __StackLimit = ORIGIN(RAM) + LENGTH(RAM) + LENGTH(ROM_IN_RAM);
+    /* Core 0's stack lives at the top of main RAM, not in SCRATCH_Y. The 4KB
+       SCRATCH_Y bank cannot hold the mbedTLS handshake: its bignum/ECC math
+       overflows it and tramples core 1's stack in SCRATCH_X, which hard-faults a
+       few seconds into the TLS handshake. Same root cause and fix as md-browser.
+       Core 1 keeps its SCRATCH_X stack; SCRATCH_Y is left unused.
+       Set only here, not via -DPICO_STACK_SIZE, because that macro also feeds
+       PICO_CORE1_STACK_SIZE (multicore.h:35) and would move core 1's stack too. */
+    __Core0StackSize = 16K;
     __StackOneTop = ORIGIN(SCRATCH_X) + LENGTH(SCRATCH_X);
-    __StackTop = ORIGIN(SCRATCH_Y) + LENGTH(SCRATCH_Y);
+    __StackTop = ORIGIN(RAM) + LENGTH(RAM);
     __StackOneBottom = __StackOneTop - SIZEOF(.stack1_dummy);
-    __StackBottom = __StackTop - SIZEOF(.stack_dummy);
+    __StackBottom = __StackTop - __Core0StackSize;
+    /* "stack limit" is poorly named, but historically is the maximum heap ptr.
+       It MUST be capped at the stack bottom now that the stack is in main RAM,
+       or the heap would grow up into it. That also fixes a second latent bug: it
+       used to be ORIGIN(RAM)+LENGTH(RAM)+LENGTH(ROM_IN_RAM), which let the heap
+       grow straight through the 64KB ROM_IN_RAM cartridge window -- harmless
+       while nothing allocated much, but the flash-copy buffer in appmngr.c did
+       exactly that once mbedTLS pushed bss up (see APP_FLASH_COPY_CHUNK_SIZE). */
+    __StackLimit = __StackBottom;
     PROVIDE(__stack = __StackTop);
 
     /* Check if data + heap + stack exceeds RAM limit */

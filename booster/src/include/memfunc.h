@@ -16,9 +16,29 @@
 #include "hardware/dma.h"
 #include "hardware/structs/xip_ctrl.h"
 
-#define COPY_FIRMWARE_TO_RAM(emulROM, emulROM_length)  \
-  do {                                                 \
-    COPY_FIRMWARE_TO_RAM_DMA(emulROM, emulROM_length); \
+// Copy a firmware image from flash into the ROM_IN_RAM window.
+// emulROM_length is in BYTES (both call sites pass a byte count).
+//
+// The DMA path streams through the XIP stream FIFO, whose XIP_STREAM_ADDR
+// register has NO bits 1:0 (XIP_STREAM_ADDR_BITS is 0xfffffffc, LSB is 2), so a
+// source address that is not 4-byte aligned is silently rounded DOWN. The copy
+// then starts up to 2 bytes early and every 16-bit word landing in ROM_IN_RAM is
+// shifted -- the Atari sees a garbage ROM and emulation never starts.
+//
+// term_firmware/upgrader_firmware are `const uint16_t[]`, so the compiler only
+// guarantees 2-byte alignment, and their addresses move with .rodata layout.
+// v2.3.0 linking mbedTLS shifted term_firmware to 0x...426 and tripped exactly
+// this. Dispatch on alignment: DMA when it is safe (the 64KB ROM copy in
+// romemul.c, which is worth streaming), byte-wise memcpy otherwise.
+#define COPY_FIRMWARE_TO_RAM(emulROM, emulROM_length)                 \
+  do {                                                                \
+    if ((((uintptr_t)(emulROM)) & 3U) == 0U) {                        \
+      COPY_FIRMWARE_TO_RAM_DMA(emulROM, emulROM_length);              \
+    } else {                                                          \
+      DPRINTF("Source 0x%X not 4-byte aligned; using memcpy\n",       \
+              (unsigned int)(uintptr_t)(emulROM));                    \
+      COPY_FIRMWARE_TO_RAM_MEMCPY(emulROM, emulROM_length);           \
+    }                                                                 \
   } while (0)
 
 #define ERASE_FIRMWARE_IN_RAM()                                \
@@ -28,10 +48,17 @@
     DPRINTF("RAM for the firmware zeroed.\n");                 \
   } while (0)
 
-#define COPY_FIRMWARE_TO_RAM_MEMCPY(emulROM, emulROM_length)                   \
-  do {                                                                         \
-    memcpy(&__rom_in_ram_start__, emulROM, emulROM_length * sizeof(uint16_t)); \
-    DPRINTF("Emulation firmware copied to RAM.\n");                            \
+// emulROM_length is in BYTES, matching COPY_FIRMWARE_TO_RAM_DMA and both call
+// sites. (It previously multiplied by sizeof(uint16_t), which would have copied
+// twice the intended length and run off the end of the ROM image into the
+// highres translation table at __rom_in_ram_start__ + 0x1000. The macro was
+// unused, so the bug never fired.)
+#define COPY_FIRMWARE_TO_RAM_MEMCPY(emulROM, emulROM_length)             \
+  do {                                                                   \
+    memcpy((void *)&__rom_in_ram_start__, (const void *)(emulROM),        \
+           (emulROM_length));                                            \
+    DPRINTF("Emulation firmware copied to RAM (%u bytes, memcpy).\n",     \
+            (unsigned int)(emulROM_length));                             \
   } while (0)
 
 #define COPY_FIRMWARE_TO_RAM_DMA(emulROM, emulROM_length)                     \
