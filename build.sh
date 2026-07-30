@@ -35,12 +35,12 @@ if [ "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" = "minsizerel" ]; then
 fi
 echo "Build type: $BUILD_TYPE"
 
-export UPGRADER_BUILD_TYPE=$BUILD_TYPE
-case "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" in
-    release|minsizerel)
-        export UPGRADER_BUILD_TYPE=MinSizeRel
-        ;;
-esac
+# The upgrader is ALWAYS MinSizeRel, debug included. It is not a standalone
+# binary: firmware.py turns it into upgrader_firmware.h, which is compiled into
+# Booster -- so its size is spent out of Booster's 768K slot (C-01). Building it
+# -Og for a debug run would inflate that header and push Booster over the limit,
+# and nobody debugs the upgrader through Booster anyway.
+export UPGRADER_BUILD_TYPE=MinSizeRel
 echo "Upgrader build type: $UPGRADER_BUILD_TYPE"
 
 # Booster is built MinSizeRel for release flows (decision D-04). With -O3 and

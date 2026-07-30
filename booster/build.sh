@@ -88,6 +88,23 @@ else
     export DEBUG_MODE=0
 fi
 
+# Booster is ALWAYS compiled MinSizeRel, debug included. It has one 768K slot to
+# fit (C-01) and -Og does not fit in it: a Debug build overflows by ~72KB and
+# will not link. A debug build therefore differs from a release build by
+# _DEBUG=1 -- DPRINTF over UART, no --strip-all -- and not by optimisation
+# level. MinSizeRel still carries -g, so the symbols are there to debug with;
+# it also carries -DNDEBUG, so assert() is off in debug builds too.
+# `release` maps here too: -O3 overflows the slot by ~48KB and will not link,
+# which is why the root build.sh already asks for MinSizeRel (D-04). Doing it
+# here as well means booster/build.sh is safe to run on its own.
+CMAKE_BUILD_TYPE_ARG=$BUILD_TYPE
+case "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" in
+    debug|release|minsizerel)
+        CMAKE_BUILD_TYPE_ARG=MinSizeRel
+        ;;
+esac
+echo "CMake build type: $CMAKE_BUILD_TYPE_ARG (DEBUG_MODE=$DEBUG_MODE)"
+
 # Set the build directory. Delete previous contents if any
 echo "Deleting previous build directory"
 rm -rf build
@@ -110,7 +127,7 @@ echo "PICO_FLASH_ASSUME_CORE0_SAFE: $PICO_FLASH_ASSUME_CORE0_SAFE"
 echo "PICO_DEOPTIMIZED_DEBUG: $PICO_DEOPTIMIZED_DEBUG"
 
 cd build
-cmake ../src -DCMAKE_BUILD_TYPE=$BUILD_TYPE 
+cmake ../src -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE_ARG
 #cmake ../src -DCMAKE_BUILD_TYPE=CustomBuild
 #cmake ../src -DCMAKE_BUILD_TYPE=Debug
 make -j4 
