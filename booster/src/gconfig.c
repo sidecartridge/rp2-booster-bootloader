@@ -3,7 +3,7 @@
 static SettingsConfigEntry defaultEntries[] = {
     {PARAM_APPS_FOLDER, SETTINGS_TYPE_STRING, "/apps"},
     {PARAM_APPS_CATALOG_URL, SETTINGS_TYPE_STRING,
-     "http://atarist.sidecartridge.com/apps.json"},
+     "https://md-store.sidecartridge.com/atari-st/apps.json"},
     {PARAM_BOOT_FEATURE, SETTINGS_TYPE_STRING, "FABRIC"},
     {PARAM_HOSTNAME, SETTINGS_TYPE_STRING, "sidecart"},
     {PARAM_SAFE_CONFIG_REBOOT, SETTINGS_TYPE_BOOL, "true"},
