@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.3.0 (unreleased)
+
+_In development. Sections below are filled in as epics land and finalised at tag time._
+
+### New features
+- Downloads now work over both `http://` and `https://` from a single firmware image, chosen per request from the URL scheme. Microfirmware installs, the app catalog, and the firmware OTA all use it.
+- The version check and the firmware OTA now use `https://` by default.
+
+### Changes
+- Booster is built as `MinSizeRel` for release flows. Linking TLS costs about 121 KB of flash, and `-O3` no longer fits the 768 KB slot.
+
+### Security
+- **HTTPS here is encrypted but not authenticated.** Certificates are not verified: the device has no CA bundle and no real-time clock, so certificate validity cannot be checked. Downloads are protected against passive eavesdropping on the network, but **not** against an active man-in-the-middle who can substitute content. Do not treat an `https://` catalog or binary URL as proof of origin.
+- The MD5 check on a downloaded microfirmware is an integrity check, not a signature. It confirms the stored bytes match what the catalog said to expect, catching truncation and corruption. Because the expected hash arrives from the same catalog over the same connection as the binary, it does not establish authenticity.
+- Verified certificates remain planned but are not in this release.
+
+---
+
 ## v2.2.0 (2026-04-20) - release
 
 This release lets users pick which version of a microfirmware to install — including older ones when the publisher keeps them online — and switch between Stable and Beta catalog channels from the Apps page.

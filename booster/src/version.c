@@ -2,10 +2,15 @@
 
 #include <ctype.h>
 
+// NOTE: this duplicates url_components_t and parse_url() from appmngr.h /
+// appmngr.c. The two copies must stay in step; folding them into one shared
+// helper is a worthwhile cleanup but out of scope for EPIC-01.
 typedef struct {
   char protocol[16];
   char host[128];
   char uri[256];
+  // Explicit port from a "host:port" URL, or 0 to let the scheme decide.
+  uint16_t port;
 } url_components_t;
 
 download_version_t status = DOWNLOAD_VERSION_IDLE;
@@ -63,6 +68,16 @@ static int parse_url(const char *url, url_components_t *components) {
     components->uri[0] = '/';
     components->uri[1] = '\0';
   }
+
+  // Split an explicit port off the host ("host:8080"); 0 means "use the
+  // scheme default", which httpc resolves to 80 or 443.
+  char *port_sep = strchr(components->host, ':');
+  if (port_sep != NULL) {
+    unsigned long parsed = strtoul(port_sep + 1, NULL, 10);
+    if (parsed == 0 || parsed > UINT16_MAX) return -1;
+    components->port = (uint16_t)parsed;
+    *port_sep = '\0';
+  }
   return 0;
 }
 
@@ -95,11 +110,9 @@ static err_t http_client_receive_version_fn(__unused void *arg,
     }
   }
   // Acknowledge all received bytes even if we truncated locally
-#if BOOSTER_DOWNLOAD_HTTPS == 1
+  // ALTCP is always enabled; altcp_recved is correct for plain http too
+  // (an http connection is just an ALTCP layer with no TLS attached).
   altcp_recved(conn, p->tot_len);
-#else
-  tcp_recved(conn, p->tot_len);
-#endif
   pbuf_free(p);
 
   // Still in progress until result callback says done
@@ -158,12 +171,8 @@ static void http_client_result_complete_fn(void *arg,
           httpc_result, rx_content_len, srv_res, err);
   req->complete = true;
 
-#if BOOSTER_DOWNLOAD_HTTPS == 1
-  if (req->tls_config) {  // free here too to avoid leaks on error
-    altcp_tls_free_config(req->tls_config);
-    req->tls_config = NULL;
-  }
-#endif
+  // Shared process-wide config; just drop the reference, never free it.
+  req->tls_config = NULL;
 
   if (err == ERR_OK && srv_res == 200) {
     status = DOWNLOAD_VERSION_COMPLETED;
@@ -206,22 +215,46 @@ static download_version_t version_start_download(const char *url) {
   request.recv_fn = http_client_receive_version_fn;
   request.result_fn = http_client_result_complete_fn;
 
-#if BOOSTER_DOWNLOAD_HTTPS == 1
-  request.tls_config = altcp_tls_create_config_client(NULL, 0);
+  // The version check is ALWAYS fetched over https, even when the URL says
+  // http://. SIDECART_BASE_URL is already https as of v2.3.0, so this is
+  // normally a no-op; it stays as a guard for a compile-time override or any
+  // future settings-provided URL that arrives as cleartext. The scheme is
+  // still parsed first so a genuinely unsupported one is rejected rather than
+  // upgraded.
+  int use_https = httpc_scheme_is_https(components.protocol);
+  if (use_https < 0) {
+    DPRINTF("Unsupported URL scheme: %s\n", components.protocol);
+    status = DOWNLOAD_VERSION_FAILED;
+    return status;
+  }
+
+  request.port = components.port;  // 0 lets httpc pick 80 or 443
+
+  if (!use_https) {
+    DPRINTF("Forcing version check to https (URL said %s)\n",
+            components.protocol);
+    // An http URL carrying no port, or an explicit :80, would otherwise send
+    // the TLS handshake to the cleartext port. Fall back to the scheme
+    // default so httpc picks 443. A non-default explicit port is honoured:
+    // that is a deliberate endpoint choice by whoever set the URL.
+    if (request.port == 0 || request.port == 80) {
+      request.port = 0;
+    }
+  }
+
+  // Always https past this point, by the force above.
+  request.tls_config = httpc_shared_tls_config();
+  if (request.tls_config == NULL) {
+    DPRINTF("Cannot initialize HTTPS\n");
+    status = DOWNLOAD_VERSION_FAILED;
+    return status;
+  }
   DPRINTF("Download with HTTPS\n");
-#else
-  DPRINTF("Download with HTTP\n");
-#endif
 
   int rc = http_client_request_async(cyw43_arch_async_context(), &request);
   if (rc != 0) {
     DPRINTF("http_client_request_async failed: %d\n", rc);
-#if BOOSTER_DOWNLOAD_HTTPS == 1
-    if (request.tls_config) {
-      altcp_tls_free_config(request.tls_config);
-      request.tls_config = NULL;
-    }
-#endif
+    request.tls_config = NULL;  // shared config, not ours to free
     status = DOWNLOAD_VERSION_FAILED;
     return status;
   }

@@ -13,6 +13,7 @@
 
 #include "appmngr.h"
 #include "display_mngr.h"
+#include "romemul.h"  // lookup_data_rom_dma_channel
 
 #define TERM_MENU_TITLE "Downloaded apps\n"
 #define TERM_MENU_INSTRUCTIONS "Type app number and press Enter\n"
@@ -86,10 +87,18 @@ static void term_refresh_apps_cache(void) {
 void __not_in_flash_func(term_dma_irq_handler_lookup)(void) {
   bool rom3_gpio = (1ul << ROM3_GPIO) & sio_hw->gpio_in;
 
-  dma_hw->ints1 = 1u << 2;
+  // Use the channel init_rom_emulator() actually claimed. This used to be a
+  // hardcoded 2, which only worked by accident: COPY_FIRMWARE_TO_RAM_DMA leaked
+  // a claimed DMA channel, so romemul's two claims landed on 1 and 2. Once that
+  // copy could take the memcpy path (misaligned source, see memfunc.h) nothing
+  // leaked channel 0 any more, romemul got 0 and 1, and this handler
+  // acknowledged a channel that never fires -- so the real interrupt was never
+  // cleared, re-fired forever, and the boot hung with no fault.
+  dma_hw->ints1 = 1u << lookup_data_rom_dma_channel;
 
   if (!rom3_gpio) {
-    uint16_t addr_lsb = dma_hw->ch[2].al3_read_addr_trig ^ 0x8000;
+    uint16_t addr_lsb =
+        dma_hw->ch[lookup_data_rom_dma_channel].al3_read_addr_trig ^ 0x8000;
     tprotocol_parse(addr_lsb, handle_protocol_command,
                     handle_protocol_checksum_error);
   }
