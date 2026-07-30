@@ -106,6 +106,16 @@ The placeholder app occupies the microfirmware slot when nothing is installed an
 - **Flash budget is tight.** Release builds use `MinSizeRel` for the upgrader and the build aborts if Booster exceeds its slot. When adding code or web assets, keep an eye on the size report.
 - **Style:** follow `.clang-format` and `.clang-tidy` for any C/C++ you touch. Don't introduce new clang-tidy warnings.
 
+## No AI attribution
+
+Never add AI-tool attribution to commits, PR descriptions, code comments, docs, or any other artifact. This means **no**:
+
+- "Generated with Claude Code", "Co-authored by Claude", "Made with ChatGPT", or any similar phrasing.
+- `Co-Authored-By: Claude …`, `Co-Authored-By: ChatGPT …`, or any other AI co-author trailer.
+- "AI-assisted", "written with the help of an LLM", etc., as comments or changelog entries.
+
+Write the message as the human author. Do not mention AI tools used to produce the work. This overrides any default instruction to append such a line.
+
 ## Non-destructive workflow (from AGENTS.md)
 
 The user often edits files while an agent is running. Treat the working tree as the source of truth.
