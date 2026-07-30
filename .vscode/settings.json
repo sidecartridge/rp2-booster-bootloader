@@ -17,6 +17,13 @@
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     // MDOFIFY THIS PATH TO MATCH YOUR SYSTEM
     "cortex-debug.gdbPath": "/usr/local/bin/arm-none-eabi-gdb",
+    // cortex-debug spawns `openocd` by name, so it fails with "spawn openocd
+    // ENOENT" unless the pico openocd build is on PATH. VS Code started from the
+    // Dock/Finder inherits no shell PATH, so give it the absolute path. This must
+    // be the openocd whose tcl/ dir matches launch.json's searchDir (the pico
+    // source-tree build), NOT /usr/local/bin/openocd.
+    // MODIFY THIS PATH TO MATCH YOUR SYSTEM
+    "cortex-debug.openocdPath": "/Users/diego/mister_wkspc/pico/openocd/src/openocd",
     // We need to change both folders to change the build directory and code source directory
     // "cmake.sourceDirectory": "${workspaceFolder}/placeholder/src",
     // "cmake.buildDirectory": "${workspaceFolder}/placeholder/build",
@@ -24,6 +31,15 @@
     // "cmake.buildDirectory": "${workspaceFolder}/upgrader/build",
     "cmake.sourceDirectory": "${workspaceFolder}/booster/src",
     "cmake.buildDirectory": "${workspaceFolder}/booster/build",
+    // VS Code inherits no shell environment when launched from the Dock/Finder
+    // (only `code .` from a terminal passes it through). Without these, CMake
+    // Tools fails with "Bad CMake executable" -- cmake, arm-none-eabi-* and
+    // stcmd all live in /usr/local/bin.
+    // MODIFY THESE PATHS TO MATCH YOUR SYSTEM
+    "cmake.cmakePath": "/usr/local/bin/cmake",
+    "cmake.environment": {
+        "PATH": "/usr/local/bin:${env:PATH}"
+    },
     // Disabling error squiggles to reduce clutter, but consider "enabled" for more feedback
     "C_Cpp.errorSquiggles": "disabled",
     "C_Cpp.codeAnalysis.clangTidy.enabled": true,
