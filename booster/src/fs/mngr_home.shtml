@@ -495,23 +495,37 @@
           return this.normalizeTaxonomyValues(types);
         },
 
-        // Creator slug for an app, as a single-element array so it plugs into
-        // buildOptions() like the other taxonomies. Empty when the catalog
-        // carries no creator for this app.
-        getAppCreators(app) {
-          return this.normalizeTaxonomyValues(app && app.creator ? app.creator : null);
+        // Apps published before the catalog carried creator information have no
+        // `creator` field. They are all ours, so an app without one is
+        // attributed to SidecarTridge rather than shown as authorless.
+        DEFAULT_CREATOR_ID: "sidecartridge",
+        DEFAULT_CREATOR_NAME: "SidecarTridge",
+
+        // The creator slug an app belongs to, defaulted as above.
+        appCreatorId(app) {
+          const slug = app && app.creator ? String(app.creator).trim() : "";
+          return slug || this.DEFAULT_CREATOR_ID;
         },
 
-        // Display name for an app's creator, or "" when there is none to show.
-        // If the app names a creator that is missing from the creators map we
-        // fall back to the raw slug rather than hiding it: the catalog does
-        // claim an author, and showing the id is honest and debuggable, where
-        // showing nothing would misrepresent the app as having no creator.
-        creatorName(app) {
-          const slug = app && app.creator ? String(app.creator).trim() : "";
-          if (!slug) return "";
+        // Creator slug as a single-element array, so it plugs into
+        // buildOptions() like the other taxonomies.
+        getAppCreators(app) {
+          return [this.appCreatorId(app)];
+        },
+
+        // Display name for a creator slug. Falls back to the raw slug when the
+        // creators map does not describe it -- the catalog does claim that
+        // author, so showing the id is honest and debuggable, where showing
+        // nothing would misrepresent the app. The default slug has a known name
+        // so it reads correctly even in catalogs with no creators map at all.
+        creatorLabel(slug) {
           const creator = this.creators[slug];
-          return creator && creator.name ? creator.name : slug;
+          if (creator && creator.name) return creator.name;
+          return slug === this.DEFAULT_CREATOR_ID ? this.DEFAULT_CREATOR_NAME : slug;
+        },
+
+        creatorName(app) {
+          return this.creatorLabel(this.appCreatorId(app));
         },
 
         buildTaxonomyFilters() {
@@ -537,14 +551,11 @@
           // selection) but display the name. Sorted by label, since that is
           // what the user reads -- slug order and display order can differ.
           this.creatorFilters = buildOptions((app) => this.getAppCreators(app))
-            .map((option) => {
-              const creator = this.creators[option.value];
-              return {
-                value: option.value,
-                label: creator && creator.name ? creator.name : option.value,
-                count: option.count,
-              };
-            })
+            .map((option) => ({
+              value: option.value,
+              label: this.creatorLabel(option.value),
+              count: option.count,
+            }))
             .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
         },
 
