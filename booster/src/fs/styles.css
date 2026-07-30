@@ -307,6 +307,60 @@ html, body {
   text-align: center;
 }
 
+/* Creator pill with an outbound link. The pill is a non-interactive wrapper: the
+   filter toggle and the link are separate controls inside it, so neither nests in
+   the other. */
+.filter-chip-with-link {
+  cursor: default;
+  gap: 0.15rem;
+  padding-right: 0.3rem;
+}
+
+.filter-chip-toggle {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 0.45rem;
+  padding: 0;
+}
+
+.filter-chip-link {
+  align-items: center;
+  border-radius: 999px;
+  color: inherit;
+  display: inline-flex;
+  font-size: 0.78em;
+  justify-content: center;
+  margin-left: 0.1rem;
+  /* small glyph, but a tap target that clears ~24px */
+  min-height: 24px;
+  min-width: 24px;
+  opacity: 0.62;
+  text-decoration: none;
+  transition: background-color 0.14s ease, opacity 0.14s ease;
+}
+
+.filter-chip-link:hover,
+.filter-chip-link:focus-visible {
+  background: rgba(30, 58, 95, 0.12);
+  opacity: 1;
+}
+
+.filter-chip-active .filter-chip-link:hover,
+.filter-chip-active .filter-chip-link:focus-visible {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.filter-chip-toggle:focus-visible,
+.filter-chip-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
 .filter-empty-state {
   width: 100%;
 }
