@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Fail fast. Without this a failed cmake, make, link or missing tool was simply
+# stepped over: the script carried on, copied whatever binary a previous build
+# had left behind, and exited 0. A root build could therefore package stale
+# firmware -- or none at all -- with nothing to show anything had gone wrong.
+# `-u` is deliberately not set; several scripts test unset positional args.
+set -Eeo pipefail
+trap 'echo "ERROR: ${BASH_SOURCE[0]}: failed at line ${LINENO}" >&2' ERR
+
 # Down to main path
 cd ..
 
