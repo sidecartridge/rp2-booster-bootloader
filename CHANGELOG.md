@@ -8,7 +8,7 @@ _In development. Sections below are filled in as epics land and finalised at tag
 - Downloads now work over both `http://` and `https://` from a single firmware image, chosen per request from the URL scheme. Microfirmware installs and the firmware OTA both use it.
 - The version check and the firmware OTA now use `https://` by default.
 - The apps catalog has moved to `https://md-store.sidecartridge.com/atari-st/apps.json`.
-- Each microfirmware on the Apps page now shows who made it, and a **Creator** filter sits alongside Platform and Features. Microfirmwares published without creator information are shown as SidecarTridge.
+- Each microfirmware on the Apps page now shows who made it, and a **Creator** filter sits alongside Platform and Features. Creators who publish a website get a small link icon on their filter chip. Microfirmwares published without creator information are shown as SidecarTridge.
 
 ### Changes
 - Booster is built as `MinSizeRel` for release flows. Linking TLS costs about 121 KB of flash, and `-O3` no longer fits the 768 KB slot.

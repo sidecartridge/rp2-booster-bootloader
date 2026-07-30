@@ -528,6 +528,18 @@
           return this.creatorLabel(this.appCreatorId(app));
         },
 
+        // Optional website for a creator, used by the link on the filter chip.
+        // Only http(s) is accepted: the catalog URL is user-configurable, so a
+        // creator record is third-party data, and binding an unchecked value to
+        // href would let a hostile catalog run javascript: in this page -- which
+        // is the device's own UI, with its config and install endpoints.
+        // Anything else, or no url at all, yields "" and the link is not drawn.
+        creatorUrl(slug) {
+          const creator = this.creators[slug];
+          const url = creator && creator.url ? String(creator.url).trim() : "";
+          return /^https?:\/\//i.test(url) ? url : "";
+        },
+
         buildTaxonomyFilters() {
           const buildOptions = (getter) => {
             const counts = new Map();
@@ -555,6 +567,7 @@
               value: option.value,
               label: this.creatorLabel(option.value),
               count: option.count,
+              url: this.creatorUrl(option.value),
             }))
             .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
         },
@@ -755,13 +768,25 @@
         <div class="filter-group" x-show="creatorFilters.length > 0">
           <span class="filter-group-title">Creator</span>
           <div class="filter-chip-list">
+            <!-- The pill carries the styling but is not interactive itself: the
+                 filter toggle and the creator's site link are siblings inside it.
+                 An anchor nested in a button is invalid HTML and breaks keyboard
+                 order. The link is drawn only when the creator declares a url. -->
             <template x-for="creator in creatorFilters" :key="creator.value">
-              <button type="button" class="filter-chip"
-                :class="{ 'filter-chip-active': isSelected('selectedCreators', creator.value) }"
-                @click="toggleSelection('selectedCreators', creator.value)">
-                <span x-text="creator.label"></span>
-                <span class="filter-chip-count" x-text="creator.count"></span>
-              </button>
+              <span class="filter-chip filter-chip-with-link"
+                :class="{ 'filter-chip-active': isSelected('selectedCreators', creator.value) }">
+                <button type="button" class="filter-chip-toggle"
+                  @click="toggleSelection('selectedCreators', creator.value)">
+                  <span x-text="creator.label"></span>
+                  <span class="filter-chip-count" x-text="creator.count"></span>
+                </button>
+                <template x-if="creator.url">
+                  <a class="filter-chip-link" :href="creator.url" target="_blank" rel="noopener"
+                    :aria-label="'Open the ' + creator.label + ' website in a new tab'"
+                    :title="'Open the ' + creator.label + ' website'"><i
+                      class="fas fa-up-right-from-square" aria-hidden="true"></i></a>
+                </template>
+              </span>
             </template>
           </div>
         </div>
