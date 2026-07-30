@@ -58,3 +58,10 @@ secrets.sh
 term/atarist/term_firmware.h
 .venv/
 *.uf2
+
+# Local backlog (epics/stories/tasks). Scoped to this folder on purpose:
+# the README screenshots under docs/ stay tracked.
+docs/epics/
+
+# clangd index cache written by the editor
+.cache/
