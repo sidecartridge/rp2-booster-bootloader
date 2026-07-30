@@ -22,6 +22,15 @@ fi
 working_folder=$1
 build_type=$2
 
+# stcmd runs `docker run -it`, which fails outright when stdin is not a
+# terminal: "cannot attach stdin to a TTY-enabled container". That is every
+# non-interactive run -- CI, a script, an agent -- and none of them need a TTY,
+# since this build only invokes make, cp, stat and truncate. STCMD_NO_TTY=1
+# drops the flag. Interactive runs are left alone.
+if [ ! -t 0 ]; then
+    export STCMD_NO_TTY=1
+fi
+
 # ST_WORKING_FOLDER=$working_folder/configurator stcmd make $build_type
 ST_WORKING_FOLDER=$working_folder stcmd make $build_type
 
