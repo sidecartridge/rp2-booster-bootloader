@@ -3,7 +3,7 @@
 static SettingsConfigEntry defaultEntries[] = {
     {PARAM_APPS_FOLDER, SETTINGS_TYPE_STRING, "/apps"},
     {PARAM_APPS_CATALOG_URL, SETTINGS_TYPE_STRING,
-     "http://atarist.sidecartridge.com/apps.json"},
+     "https://md-store.sidecartridge.com/atari-st/apps.json"},
     {PARAM_BOOT_FEATURE, SETTINGS_TYPE_STRING, "FABRIC"},
     {PARAM_HOSTNAME, SETTINGS_TYPE_STRING, "sidecart"},
     {PARAM_SAFE_CONFIG_REBOOT, SETTINGS_TYPE_BOOL, "true"},
@@ -99,3 +99,57 @@ int gconfig_init(const char *currentAppName) {
  * @return SettingsContext* Pointer to the global settings context.
  */
 SettingsContext *gconfig_getContext(void) { return &gSettingsCtx; }
+
+// One-shot migration of APPS_CATALOG_URL onto the md-store host (D-06).
+//
+// Migrate if and ONLY if the stored value is byte-for-byte one of the three
+// canonical URLs that shipped firmware wrote. Those three strings were written
+// by Booster itself and are always literal, so an exact comparison is safe and
+// anything differing by a single character is by definition user-supplied and
+// must be left alone: custom hosts, the https variants of the old host, and
+// anything carrying a query string all stay untouched. No normalisation of
+// case, trailing slash or query.
+//
+// Verified against git: these three values are identical in v2.2.0 and in the
+// commit before the repoint, so the table covers every value a shipped firmware
+// could have stored.
+static const struct {
+  const char *from;
+  const char *to;
+} CATALOG_URL_MIGRATIONS[] = {
+    {"http://atarist.sidecartridge.com/apps.json",
+     "https://md-store.sidecartridge.com/atari-st/apps.json"},
+    {"http://atarist.sidecartridge.com/apps-beta.json",
+     "https://md-store.sidecartridge.com/atari-st/apps-beta.json"},
+    {"http://atarist.sidecartridge.com/apps-dev.json",
+     "https://md-store.sidecartridge.com/atari-st/apps-dev.json"},
+};
+
+bool gconfig_migrateCatalogUrl(void) {
+  SettingsConfigEntry *entry =
+      settings_find_entry(gconfig_getContext(), PARAM_APPS_CATALOG_URL);
+  if (entry == NULL) {
+    // Entry missing entirely, which should not happen: the defaults table
+    // always provides one. Nothing to migrate either way.
+    return false;
+  }
+
+  for (size_t i = 0;
+       i < sizeof(CATALOG_URL_MIGRATIONS) / sizeof(CATALOG_URL_MIGRATIONS[0]);
+       i++) {
+    if (strcmp(entry->value, CATALOG_URL_MIGRATIONS[i].from) != 0) {
+      continue;
+    }
+    DPRINTF("Migrating apps catalog URL:\n  from %s\n  to   %s\n",
+            CATALOG_URL_MIGRATIONS[i].from, CATALOG_URL_MIGRATIONS[i].to);
+    settings_put_string(gconfig_getContext(), PARAM_APPS_CATALOG_URL,
+                        CATALOG_URL_MIGRATIONS[i].to);
+    settings_save(gconfig_getContext(), true);
+    return true;
+  }
+
+  // No match: leave the value alone and, importantly, do NOT write flash. A
+  // fresh device (already holding the new default), an already-migrated device,
+  // and a user's custom URL all land here.
+  return false;
+}

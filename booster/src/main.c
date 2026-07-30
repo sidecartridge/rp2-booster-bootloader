@@ -98,6 +98,12 @@ int main() {
     DPRINTF("Global configuration initialized\n");
   }
 
+  // Migrate a canonical apps-catalog URL onto the md-store host (D-06). Runs
+  // before ROM emulation starts, so the one-time flash write cannot disturb the
+  // cartridge port, and before anything can serve the APPSURL SSI tag. A no-op
+  // (and no flash write) for custom URLs and already-migrated devices.
+  gconfig_migrateCatalogUrl();
+
   // Configure the input pins for SELECT button
   select_configure();
   select_coreWaitPush(reset_device, reset_deviceAndEraseFlash);

@@ -41,4 +41,17 @@
 int gconfig_init(const char *currentAppName);
 SettingsContext *gconfig_getContext(void);
 
+/**
+ * @brief One-shot migration of APPS_CATALOG_URL onto the md-store host.
+ *
+ * Rewrites the stored catalog URL if and only if it is byte-for-byte one of the
+ * three canonical URLs that shipped firmware wrote. Any other value -- a user's
+ * own catalog, the https variant of the old host, anything with a query string,
+ * or an already-migrated URL -- is left untouched, and in that case NO flash
+ * write happens. Call once after gconfig_init().
+ *
+ * @return true if the URL was migrated and saved, false if nothing changed.
+ */
+bool gconfig_migrateCatalogUrl(void);
+
 #endif  // GCONFIG_H

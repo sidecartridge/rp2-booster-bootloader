@@ -47,9 +47,9 @@
         fetchError: false,  // new flag for remote fetch error
         appsCatalogUrl: `<!--#APPSURL-->`,
         channelUrls: {
-          stable: 'http://atarist.sidecartridge.com/apps.json',
-          beta:   'http://atarist.sidecartridge.com/apps-beta.json',
-          dev:    'http://atarist.sidecartridge.com/apps-dev.json',
+          stable: 'https://md-store.sidecartridge.com/atari-st/apps.json',
+          beta:   'https://md-store.sidecartridge.com/atari-st/apps-beta.json',
+          dev:    'https://md-store.sidecartridge.com/atari-st/apps-dev.json',
         },
         channelLabels: {
           stable: 'Stable',
