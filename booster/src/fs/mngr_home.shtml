@@ -26,12 +26,15 @@
     function appManager() {
       return {
         apps: [],         // Remote apps
+        creators: {},     // Catalog creators, keyed by creator id (may be absent)
         local_apps: [],   // Local apps discovered via cgi
         installed_app: [],
         machineFilters: [],
         typeFilters: [],
+        creatorFilters: [],
         selectedMachines: [],
         selectedTypes: [],
+        selectedCreators: [],
         loaded_apps: false,
         showDeleteModal: false,
         showLaunchModal: false,
@@ -122,6 +125,11 @@
             .then((response) => response.json())
             .then((data) => {
               this.apps = data.apps || [];
+              // Creators is an OBJECT keyed by creator id, not an array. Older
+              // catalogs and custom ones may not carry it at all, so default to
+              // an empty map and let creatorName() degrade to nothing.
+              this.creators =
+                data.creators && typeof data.creators === "object" ? data.creators : {};
               this.apps.forEach((app) => this.normalizeVersions(app));
 
               // 2) Fetch local apps
@@ -487,6 +495,25 @@
           return this.normalizeTaxonomyValues(types);
         },
 
+        // Creator slug for an app, as a single-element array so it plugs into
+        // buildOptions() like the other taxonomies. Empty when the catalog
+        // carries no creator for this app.
+        getAppCreators(app) {
+          return this.normalizeTaxonomyValues(app && app.creator ? app.creator : null);
+        },
+
+        // Display name for an app's creator, or "" when there is none to show.
+        // If the app names a creator that is missing from the creators map we
+        // fall back to the raw slug rather than hiding it: the catalog does
+        // claim an author, and showing the id is honest and debuggable, where
+        // showing nothing would misrepresent the app as having no creator.
+        creatorName(app) {
+          const slug = app && app.creator ? String(app.creator).trim() : "";
+          if (!slug) return "";
+          const creator = this.creators[slug];
+          return creator && creator.name ? creator.name : slug;
+        },
+
         buildTaxonomyFilters() {
           const buildOptions = (getter) => {
             const counts = new Map();
@@ -504,6 +531,21 @@
 
           this.machineFilters = buildOptions((app) => this.getAppMachines(app));
           this.typeFilters = buildOptions((app) => this.getAppTypes(app));
+
+          // Creators carry a label distinct from their value: chips filter on
+          // the slug (a stable id, so renaming a creator cannot invalidate a
+          // selection) but display the name. Sorted by label, since that is
+          // what the user reads -- slug order and display order can differ.
+          this.creatorFilters = buildOptions((app) => this.getAppCreators(app))
+            .map((option) => {
+              const creator = this.creators[option.value];
+              return {
+                value: option.value,
+                label: creator && creator.name ? creator.name : option.value,
+                count: option.count,
+              };
+            })
+            .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
         },
 
         toggleSelection(target, value) {
@@ -524,10 +566,15 @@
         clearFilters() {
           this.selectedMachines = [];
           this.selectedTypes = [];
+          this.selectedCreators = [];
         },
 
         hasActiveFilters() {
-          return this.selectedMachines.length > 0 || this.selectedTypes.length > 0;
+          return (
+            this.selectedMachines.length > 0 ||
+            this.selectedTypes.length > 0 ||
+            this.selectedCreators.length > 0
+          );
         },
 
         matchesSelectedFilters(app) {
@@ -537,8 +584,11 @@
           const matchesTypes =
             this.selectedTypes.length === 0 ||
             this.getAppTypes(app).some((value) => this.selectedTypes.includes(value));
+          const matchesCreators =
+            this.selectedCreators.length === 0 ||
+            this.getAppCreators(app).some((value) => this.selectedCreators.includes(value));
 
-          return matchesMachines && matchesTypes;
+          return matchesMachines && matchesTypes && matchesCreators;
         },
 
         filteredApps() {
@@ -630,7 +680,7 @@
     <p>This page lists the micro-firmwares you can install, launch, or remove.</p>
     <ul class="apps-help">
       <li><strong>Catalog channel</strong>: pick <strong>Stable</strong> for verified releases or <strong>Beta</strong> for newer, less-tested builds.</li>
-      <li><strong>Platform</strong> and <strong>Features</strong>: click the chips to filter the list. Combine filters to narrow the catalog.</li>
+      <li><strong>Platform</strong>, <strong>Features</strong> and <strong>Creator</strong>: click the chips to filter the list. Combine filters to narrow the catalog.</li>
       <li><strong>Action button</strong> (Install / Update / Downgrade): installs the version selected in the dropdown &mdash; latest by default. Downgrades ask for confirmation.</li>
       <li><strong>Launch</strong>: starts an installed app. To return here later, press the <strong>SELECT</strong> button on the device and follow the on-screen instructions.</li>
     </ul>
@@ -686,6 +736,20 @@
                 @click="toggleSelection('selectedTypes', type.value)">
                 <span x-text="type.value"></span>
                 <span class="filter-chip-count" x-text="type.count"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <div class="filter-group" x-show="creatorFilters.length > 0">
+          <span class="filter-group-title">Creator</span>
+          <div class="filter-chip-list">
+            <template x-for="creator in creatorFilters" :key="creator.value">
+              <button type="button" class="filter-chip"
+                :class="{ 'filter-chip-active': isSelected('selectedCreators', creator.value) }"
+                @click="toggleSelection('selectedCreators', creator.value)">
+                <span x-text="creator.label"></span>
+                <span class="filter-chip-count" x-text="creator.count"></span>
               </button>
             </template>
           </div>
@@ -792,6 +856,10 @@
                 <span class="installed-version-note" x-text="'(installed: ' + displayVersion(app.installedVersion) + ')'"></span>
               </template>
             </h4>
+            <!-- Creator: hidden entirely when the catalog carries none -->
+            <template x-if="creatorName(app)">
+              <p class="app-creator">by <span x-text="creatorName(app)"></span></p>
+            </template>
             <!-- Version selector: only when more than one version is published -->
             <template x-if="app.allVersions && app.allVersions.length > 1">
               <div class="version-selector">
