@@ -515,6 +515,12 @@ ul.device-tags li {
   margin-left: 0.4rem;
 }
 
+.app-creator {
+  font-size: 0.85rem;
+  color: #777;
+  margin: 0 0 0.4rem 0;
+}
+
 .channel-selector {
   margin: 0.5rem 0 1rem;
 }
