@@ -20,7 +20,7 @@ _In development. Sections below are filled in as epics land and finalised at tag
 - Debug builds are compiled with the same size optimisation as release builds and differ only in their debug logging. A debug build previously overflowed the flash slot and never linked at all.
 - The Atari ST terminal firmware is rebuilt on every build, including in CI, where it was being skipped without any error.
 - Devices already using one of the standard catalog channels are switched to the new store automatically on upgrade. A custom catalog URL is never modified.
-- The Beta and Development channels now point at the new store. They will start working once those catalogs are published there; until then the Apps page falls back to the microfirmwares already installed on the SD card.
+- The Development channel now points at the new store and works. The Beta channel points there too but the store does not publish that catalog yet, so selecting it shows an empty list until it does.
 
 ### Security
 - **HTTPS on the device is encrypted but not authenticated.** Certificates are not verified: the device has no CA bundle and no real-time clock, so certificate validity cannot be checked. Downloads it performs itself — microfirmware binaries and the firmware OTA — are protected against passive eavesdropping on the network, but **not** against an active man-in-the-middle who can substitute content. Do not treat an `https://` binary URL as proof of origin. (The apps catalog is fetched by your browser rather than the device, so it does get normal certificate verification.)
