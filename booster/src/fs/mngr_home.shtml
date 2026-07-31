@@ -540,6 +540,18 @@
           return /^https?:\/\//i.test(url) ? url : "";
         },
 
+        // Official creators are pinned to the front of the chip list. The flag
+        // comes from the catalog; when it is missing, the default attribution
+        // is still ours, so it counts as official even in a catalog that
+        // carries no creators map at all. Anyone else is community.
+        creatorIsOfficial(slug) {
+          const creator = this.creators[slug];
+          if (creator && typeof creator.official === "boolean") {
+            return creator.official;
+          }
+          return slug === this.DEFAULT_CREATOR_ID;
+        },
+
         buildTaxonomyFilters() {
           const buildOptions = (getter) => {
             const counts = new Map();
@@ -560,16 +572,21 @@
 
           // Creators carry a label distinct from their value: chips filter on
           // the slug (a stable id, so renaming a creator cannot invalidate a
-          // selection) but display the name. Sorted by label, since that is
-          // what the user reads -- slug order and display order can differ.
+          // selection) but display the name. Official creators always come
+          // first; within each group, sorted by label, since that is what the
+          // user reads -- slug order and display order can differ.
           this.creatorFilters = buildOptions((app) => this.getAppCreators(app))
             .map((option) => ({
               value: option.value,
               label: this.creatorLabel(option.value),
               count: option.count,
               url: this.creatorUrl(option.value),
+              official: this.creatorIsOfficial(option.value),
             }))
-            .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+            .sort((a, b) => {
+              if (a.official !== b.official) return a.official ? -1 : 1;
+              return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
+            });
         },
 
         toggleSelection(target, value) {
@@ -703,13 +720,13 @@
     <h2>Available Apps</h2>
     <p>This page lists the micro-firmwares you can install, launch, or remove.</p>
     <ul class="apps-help">
-      <li><strong>Catalog channel</strong>: pick <strong>Stable</strong> for verified releases or <strong>Beta</strong> for newer, less-tested builds.</li>
+      <li><strong>Release type</strong>: <strong>Stable</strong> lists tested micro-firmware releases. <strong>Beta</strong> lists pre-release versions &mdash; newer features, but expect bugs.</li>
       <li><strong>Platform</strong>, <strong>Features</strong> and <strong>Creator</strong>: click the chips to filter the list. Combine filters to narrow the catalog.</li>
       <li><strong>Action button</strong> (Install / Update / Downgrade): installs the version selected in the dropdown &mdash; latest by default. Downgrades ask for confirmation.</li>
       <li><strong>Launch</strong>: starts an installed app. To return here later, press the <strong>SELECT</strong> button on the device and follow the on-screen instructions.</li>
     </ul>
     <div class="filter-group channel-selector">
-      <span class="filter-group-title">Catalog channel</span>
+      <span class="filter-group-title">Release type</span>
       <div class="filter-chip-list">
         <template x-for="channel in visibleChannels" :key="channel">
           <button type="button" class="filter-chip"
@@ -731,7 +748,7 @@
     <div class="banner banner-info loading-banner" x-show="!loaded_apps && !fetchError" x-cloak>
       <i class="fas fa-circle-notch fa-spin banner-icon"></i>
       <span>
-        Loading the <strong x-text="currentChannelLabel()"></strong> catalog&hellip;
+        Loading <strong x-text="currentChannelLabel()"></strong> micro-firmwares&hellip;
       </span>
     </div>
 
@@ -861,8 +878,8 @@
         x-show="loaded_apps && !fetchError && apps.length === 0">
         <i class="fas fa-info-circle banner-icon"></i>
         <span>
-          The <strong x-text="currentChannelLabel()"></strong> catalog is empty.
-          <a href="/mngr_config.shtml">Pick another channel</a> in the Config page.
+          No <strong x-text="currentChannelLabel()"></strong> micro-firmwares are published yet.
+          <a href="/mngr_config.shtml">Pick another release type</a> in the Config page.
         </span>
       </div>
       <div class="banner banner-info filter-empty-state"
