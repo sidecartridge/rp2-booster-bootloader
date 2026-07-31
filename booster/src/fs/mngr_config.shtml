@@ -215,9 +215,9 @@
               <div x-effect="syncAppsCatalogUrl()">
                 <select class="pure-input-1" x-model="appsChannel"
                   x-bind:title="param.placeholder">
-                  <option value="stable">Stable &mdash; tested releases (default)</option>
-                  <option value="beta">Beta &mdash; pre-release, expect bugs</option>
-                  <option value="dev">Development &mdash; unstable, for testing</option>
+                  <option value="stable">Stable - Tested release (default)</option>
+                  <option value="beta">Testing - unstable releases</option>
+                  <option value="dev">Development - Local development only</option>
                   <option value="custom">Custom catalog URL</option>
                 </select>
                 <input x-show="appsChannel === 'custom'" type="text" class="pure-input-1"
