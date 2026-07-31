@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <strings.h>
 
+#include "devapi.h"
 #include "select.h"
 #include "upgrader_firmware.h"
 
@@ -1717,24 +1718,28 @@ download_launch_err_t appmngr_launch_app() {
            settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value,
            launch_app_uuid);
 
-  // We have a magic UUIDv4 for the development app
-  // the magic UUIDv4 is 44444444-4444-4444-8444-444444444444
-  // if the UUID is the magic UUID, we don't store the UF2 file to the flash
-  // memory.
+  // The development app (magic UUID 44444444-4444-4444-8444-444444444444) is
+  // normally launched WITHOUT copying anything to flash: the developer put the
+  // binary in the microfirmware slot themselves, with a debug probe or the
+  // USB/BOOTSEL dance, and overwriting it would destroy exactly what they
+  // wanted to run.
   //
-  // This means that after launching the app with the magic UUID, the
-  // developer must manually copy the UF2 file to the flash memory or
-  // launch from a development environment.
+  // The deploy API (EPIC-05) adds a third way to get a binary there. When it
+  // has uploaded a .uf2, that file IS what the developer wants to run, so it
+  // must be flashed like any other app. When it has not, the old behaviour has
+  // to hold exactly as before -- that is the probe workflow, and breaking it
+  // would trade one group of developers for another.
+  bool isDevApp = strcmp(launch_app_uuid, DEVAPI_DEV_APP_UUID) == 0;
+  bool flashIt = !isDevApp || devapi_hasUploadedBinary();
 
-  if (strcmp(launch_app_uuid, "44444444-4444-4444-8444-444444444444") != 0) {
-    // Copy the app binary to the flash memory
+  if (flashIt) {
     DPRINTF("Copying app binary to flash memory\n");
     int res = storeUF2FileToFlash(
         binary_filename, (uint32_t)&_storage_flash_start,
         (uint32_t)&__flash_binary_start - (uint32_t)&_storage_flash_start,
         APP_FLASH_COPY_CHUNK_SIZE);
   } else {
-    DPRINTF("Development app launched\n");
+    DPRINTF("Development app launched; nothing uploaded, leaving flash alone\n");
   }
 
   // After copying the executable from the SD card to the flash memory, we need
