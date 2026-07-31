@@ -8,12 +8,16 @@
 
 #include "fabric_httpd.h"
 
+#include "devapi.h"
+
 #define WIFI_PASS_BUFSIZE 64
 static char *ssid = NULL;
 static char pass[WIFI_PASS_BUFSIZE];
 static int auth = -1;
 static void *current_connection;
 static void *valid_connection;
+// Non-NULL while a developer .uf2 upload owns the POST body (EPIC-05).
+static void *uploadConnection = NULL;
 static fabric_httpd_callback_t set_config_callback;
 static fabric_httpd_served_callback_t set_served_callback = NULL;
 
@@ -270,6 +274,31 @@ err_t httpd_post_begin(void *connection, const char *uri,
   LWIP_UNUSED_ARG(content_len);
   LWIP_UNUSED_ARG(post_auto_wnd);
   DPRINTF("POST request for URI: %s\n", uri);
+
+  // Developer deploy API (EPIC-05). These POST callbacks are lwIP globals --
+  // one set for the whole binary -- so the manager-mode upload is dispatched
+  // here alongside the fabric-mode password form. devapi_uploadBegin()
+  // enforces the gate; nothing is written if it refuses.
+  if (!strcmp(uri, DEVAPI_UPLOAD_URI)) {
+    // No guard on current_connection here on purpose. devapi_uploadBegin()
+    // abandons a stale transfer and starts fresh, which is what recovers the
+    // API after a dropped connection; refusing at this layer would make that
+    // recovery unreachable and wedge uploads until reboot.
+    devapi_err_t derr = devapi_uploadBegin(content_len);
+    if (derr != DEVAPI_OK) {
+      DPRINTF("Upload rejected: %d\n", derr);
+      return ERR_VAL;
+    }
+    uploadConnection = connection;
+    current_connection = connection;
+    valid_connection = NULL;
+    // Let lwIP manage the receive window: the SD write is the slow part and
+    // pacing it by hand would only add a way to get it wrong.
+    *post_auto_wnd = 1;
+    snprintf(response_uri, response_uri_len, "/response.shtml");
+    return ERR_OK;
+  }
+
   if (!memcmp(uri, "/ap_pass.cgi", 11)) {
     DPRINTF("POST request for ap_pass.cgi\n");
     if (current_connection != connection) {
@@ -288,6 +317,16 @@ err_t httpd_post_begin(void *connection, const char *uri,
 }
 
 err_t httpd_post_receive_data(void *connection, struct pbuf *p) {
+  if (uploadConnection == connection) {
+    devapi_err_t derr = devapi_uploadData(p);
+    pbuf_free(p);
+    if (derr != DEVAPI_OK) {
+      uploadConnection = NULL;
+      current_connection = NULL;
+      return ERR_ABRT;
+    }
+    return ERR_OK;
+  }
   if (current_connection == connection) {
     DPRINTF("POST data received\n");
     u16_t token_pass = pbuf_memfind(p, "pass=", 5, 0);
@@ -325,6 +364,16 @@ err_t httpd_post_receive_data(void *connection, struct pbuf *p) {
 
 void httpd_post_finished(void *connection, char *response_uri,
                          u16_t response_uri_len) {
+  if (uploadConnection == connection) {
+    devapi_err_t derr = devapi_uploadFinish(true);
+    uploadConnection = NULL;
+    current_connection = NULL;
+    // The caller is a script, not a browser, so the distinction that matters
+    // is only "did the bytes land".
+    snprintf(response_uri, response_uri_len,
+             derr == DEVAPI_OK ? "/response.shtml" : "/error.shtml");
+    return;
+  }
   snprintf(response_uri, response_uri_len, "/ap_step2.shtml");
   if (current_connection == connection) {
     if (valid_connection == connection) {

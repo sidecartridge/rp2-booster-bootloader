@@ -142,6 +142,7 @@ pico_generate_pio_header(${PROJECT_NAME} ${CMAKE_CURRENT_LIST_DIR}/romemul.pio)
 target_sources(${PROJECT_NAME} PRIVATE
         appmngr.c
         blink.c
+        devapi.c
         display.c
         display_fabric.c
         display_mngr.c
