@@ -9,9 +9,16 @@ _In development. Sections below are filled in as epics land and finalised at tag
 - The version check and the firmware OTA now use `https://` by default.
 - The apps catalog has moved to `https://md-store.sidecartridge.com/atari-st/apps.json`.
 - Each microfirmware on the Apps page now shows who made it, and a **Creator** filter sits alongside Platform and Features. Creators who publish a website get a small link icon on their filter chip. Microfirmwares published without creator information are shown as SidecarTridge.
+- New **Release type** filter on the Apps page: **All**, **Stable** and **Beta**. Stable hides beta versions, Beta shows only beta versions, and All shows everything. It filters the list you already have, and does not change which catalog is loaded.
 
 ### Changes
 - Booster is built as `MinSizeRel` for release flows. Linking TLS costs about 121 KB of flash, and `-O3` no longer fits the 768 KB slot.
+- The Stable and Beta buttons on the Apps page used to switch catalog and reload the page, quietly rewriting your saved catalog setting. They now only filter, and the Config page is the single place that chooses the catalog.
+- The catalog options on the Config page say what each one is for: `Stable - Tested release (default)`, `Testing - unstable releases`, `Development - Local development only`.
+- Official creators are listed first in the **Creator** filter.
+- The build scripts now stop at the first failure. A failed compile or link used to be stepped over, so a build could report success while packaging firmware left over from an earlier run, or produce no firmware at all.
+- Debug builds are compiled with the same size optimisation as release builds and differ only in their debug logging. A debug build previously overflowed the flash slot and never linked at all.
+- The Atari ST terminal firmware is rebuilt on every build, including in CI, where it was being skipped without any error.
 - Devices already using one of the standard catalog channels are switched to the new store automatically on upgrade. A custom catalog URL is never modified.
 - The Beta and Development channels now point at the new store. They will start working once those catalogs are published there; until then the Apps page falls back to the microfirmwares already installed on the SD card.
 
