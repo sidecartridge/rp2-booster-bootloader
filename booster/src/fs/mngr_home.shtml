@@ -48,69 +48,12 @@
         maxRetries: 3,
         initialized: false, // new flag to prevent duplicate init
         fetchError: false,  // new flag for remote fetch error
-        appsCatalogUrl: `<!--#APPSURL-->`,
-        channelUrls: {
-          stable: 'https://md-store.sidecartridge.com/atari-st/apps.json',
-          beta:   'https://md-store.sidecartridge.com/atari-st/apps-beta.json',
-          dev:    'https://md-store.sidecartridge.com/atari-st/apps-dev.json',
-        },
-        channelLabels: {
-          stable: 'Stable',
-          beta:   'Beta',
-          dev:    'Development',
-          custom: 'Custom',
-        },
-        // Chips shown on the Apps page. Other channels (Development, Custom)
-        // are only reachable from the Config page.
-        visibleChannels: ['stable', 'beta'],
-        switchingChannel: false,
-        channelSwitchError: '',
-        // Normalize before comparing so trailing slash, scheme case, or a query
-        // string don't flip a saved preset URL into "custom".
-        normalizeUrl(url) {
-          if (!url) return '';
-          let s = String(url).trim().toLowerCase();
-          const q = s.indexOf('?');
-          if (q >= 0) s = s.slice(0, q);
-          const h = s.indexOf('#');
-          if (h >= 0) s = s.slice(0, h);
-          if (s.endsWith('/')) s = s.slice(0, -1);
-          return s;
-        },
-        currentChannel() {
-          const target = this.normalizeUrl(this.appsCatalogUrl);
-          for (const key of Object.keys(this.channelUrls)) {
-            if (this.normalizeUrl(this.channelUrls[key]) === target) return key;
-          }
-          return 'custom';
-        },
-        currentChannelLabel() {
-          return this.channelLabels[this.currentChannel()] || 'Custom';
-        },
-        switchChannel(channel) {
-          if (this.switchingChannel) return;
-          if (this.currentChannel() === channel) return;
-          const url = this.channelUrls[channel];
-          if (!url) return;
-          this.switchingChannel = true;
-          this.channelSwitchError = '';
-          const payload = JSON.stringify([
-            { name: 'APPS_CATALOG_URL', type: 'STRING', value: url },
-          ]);
-          const base64 = btoa(payload);
-          fetch(`/saveparams.cgi?json=${base64}`, { method: 'GET' })
-            .then((res) => res.text())
-            .then((text) => {
-              const json = JSON.parse(text);
-              if (json.status !== 200) throw new Error(json.message || 'Save failed');
-              this.switchingChannel = false;
-              window.location.reload();
-            })
-            .catch((err) => {
-              this.switchingChannel = false;
-              this.channelSwitchError = `Could not switch channel: ${err.message || err}`;
-            });
-        },
+        // Release type filters the catalog that is already loaded. It does not
+        // choose WHICH catalog to load -- that is the Config page's job, and
+        // whatever it points at is what these chips filter.
+        releaseTypes: ['all', 'stable', 'beta'],
+        releaseTypeLabels: { all: 'All', stable: 'Stable', beta: 'Beta' },
+        selectedReleaseType: 'all',
 
         init() {
           if (this.initialized) return;
@@ -544,6 +487,20 @@
         // comes from the catalog; when it is missing, the default attribution
         // is still ours, so it counts as official even in a catalog that
         // carries no creators map at all. Anyone else is community.
+        // A release is beta when its version string carries the word "beta",
+        // case insensitive -- 2.1.0-beta, 2.1.0BETA2, v3.0.0-Beta.1 all match.
+        // Judged on the catalog entry's own version, which is the newest one
+        // published, not on whichever version the dropdown happens to show.
+        appIsBeta(app) {
+          return /beta/i.test(String((app && app.version) || ''));
+        },
+
+        matchesReleaseType(app) {
+          if (this.selectedReleaseType === 'stable') return !this.appIsBeta(app);
+          if (this.selectedReleaseType === 'beta') return this.appIsBeta(app);
+          return true;
+        },
+
         creatorIsOfficial(slug) {
           const creator = this.creators[slug];
           if (creator && typeof creator.official === "boolean") {
@@ -608,13 +565,15 @@
           this.selectedMachines = [];
           this.selectedTypes = [];
           this.selectedCreators = [];
+          this.selectedReleaseType = 'all';
         },
 
         hasActiveFilters() {
           return (
             this.selectedMachines.length > 0 ||
             this.selectedTypes.length > 0 ||
-            this.selectedCreators.length > 0
+            this.selectedCreators.length > 0 ||
+            this.selectedReleaseType !== 'all'
           );
         },
 
@@ -629,7 +588,10 @@
             this.selectedCreators.length === 0 ||
             this.getAppCreators(app).some((value) => this.selectedCreators.includes(value));
 
-          return matchesMachines && matchesTypes && matchesCreators;
+          return (
+            matchesMachines && matchesTypes && matchesCreators &&
+            this.matchesReleaseType(app)
+          );
         },
 
         filteredApps() {
@@ -720,35 +682,28 @@
     <h2>Available Apps</h2>
     <p>This page lists the micro-firmwares you can install, launch, or remove.</p>
     <ul class="apps-help">
-      <li><strong>Release type</strong>: <strong>Stable</strong> lists tested micro-firmware releases. <strong>Beta</strong> lists pre-release versions &mdash; newer features, but expect bugs.</li>
+      <li><strong>Release type</strong>: <strong>All</strong> lists everything. <strong>Stable</strong> hides beta versions, <strong>Beta</strong> shows only beta versions.</li>
       <li><strong>Platform</strong>, <strong>Features</strong> and <strong>Creator</strong>: click the chips to filter the list. Combine filters to narrow the catalog.</li>
-      <li><strong>Action button</strong> (Install / Update / Downgrade): installs the version selected in the dropdown &mdash; latest by default. Downgrades ask for confirmation.</li>
+      <li><strong>Action button</strong> (Install / Update / Downgrade): installs the version selected in the dropdown, latest by default. Downgrades ask for confirmation.</li>
       <li><strong>Launch</strong>: starts an installed app. To return here later, press the <strong>SELECT</strong> button on the device and follow the on-screen instructions.</li>
     </ul>
-    <div class="filter-group channel-selector">
+    <div class="filter-group release-type-selector">
       <span class="filter-group-title">Release type</span>
       <div class="filter-chip-list">
-        <template x-for="channel in visibleChannels" :key="channel">
+        <template x-for="releaseType in releaseTypes" :key="releaseType">
           <button type="button" class="filter-chip"
-            :class="{ 'filter-chip-active': currentChannel() === channel }"
-            :disabled="switchingChannel"
-            @click="switchChannel(channel)">
-            <span x-text="channelLabels[channel]"></span>
+            :class="{ 'filter-chip-active': selectedReleaseType === releaseType }"
+            @click="selectedReleaseType = releaseType">
+            <span x-text="releaseTypeLabels[releaseType]"></span>
           </button>
         </template>
       </div>
     </div>
 
-    <div class="banner banner-error" x-show="channelSwitchError" x-cloak>
-      <i class="fas fa-exclamation-circle banner-icon"></i>
-      <span x-text="channelSwitchError"></span>
-      <button class="banner-close" @click="channelSwitchError = ''" aria-label="Close">&times;</button>
-    </div>
-
     <div class="banner banner-info loading-banner" x-show="!loaded_apps && !fetchError" x-cloak>
       <i class="fas fa-circle-notch fa-spin banner-icon"></i>
       <span>
-        Loading <strong x-text="currentChannelLabel()"></strong> micro-firmwares&hellip;
+        Loading micro-firmwares&hellip;
       </span>
     </div>
 
@@ -878,8 +833,8 @@
         x-show="loaded_apps && !fetchError && apps.length === 0">
         <i class="fas fa-info-circle banner-icon"></i>
         <span>
-          No <strong x-text="currentChannelLabel()"></strong> micro-firmwares are published yet.
-          <a href="/mngr_config.shtml">Pick another release type</a> in the Config page.
+          This catalog has no micro-firmwares.
+          <a href="/mngr_config.shtml">Pick a different one</a> in the Config page.
         </span>
       </div>
       <div class="banner banner-info filter-empty-state"
