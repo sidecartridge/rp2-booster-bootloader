@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Fail fast. Without this a failed cmake, make, link or missing tool was simply
+# stepped over: the script carried on, copied whatever binary a previous build
+# had left behind, and exited 0. A root build could therefore package stale
+# firmware -- or none at all -- with nothing to show anything had gone wrong.
+# `-u` is deliberately not set; several scripts test unset positional args.
+set -Eeo pipefail
+trap 'echo "ERROR: ${BASH_SOURCE[0]}: failed at line ${LINENO}" >&2' ERR
+
 # Ensure an argument is provided
 if [ -z "$1" ]; then
     echo "Usage: $0 <working_folder> all|release"
@@ -13,6 +21,15 @@ fi
 
 working_folder=$1
 build_type=$2
+
+# stcmd runs `docker run -it`, which fails outright when stdin is not a
+# terminal: "cannot attach stdin to a TTY-enabled container". That is every
+# non-interactive run -- CI, a script, an agent -- and none of them need a TTY,
+# since this build only invokes make, cp, stat and truncate. STCMD_NO_TTY=1
+# drops the flag. Interactive runs are left alone.
+if [ ! -t 0 ]; then
+    export STCMD_NO_TTY=1
+fi
 
 # ST_WORKING_FOLDER=$working_folder/configurator stcmd make $build_type
 ST_WORKING_FOLDER=$working_folder stcmd make $build_type

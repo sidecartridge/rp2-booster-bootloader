@@ -1,5 +1,13 @@
 #!/bin/bash
 
+# Fail fast. Without this a failed cmake, make, link or missing tool was simply
+# stepped over: the script carried on, copied whatever binary a previous build
+# had left behind, and exited 0. A root build could therefore package stale
+# firmware -- or none at all -- with nothing to show anything had gone wrong.
+# `-u` is deliberately not set; several scripts test unset positional args.
+set -Eeo pipefail
+trap 'echo "ERROR: ${BASH_SOURCE[0]}: failed at line ${LINENO}" >&2' ERR
+
 # Copy the version.txt to each project
 echo "Copy version.txt to each project"
 cp version.txt booster/
@@ -27,12 +35,12 @@ if [ "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" = "minsizerel" ]; then
 fi
 echo "Build type: $BUILD_TYPE"
 
-export UPGRADER_BUILD_TYPE=$BUILD_TYPE
-case "$(echo "$BUILD_TYPE" | tr '[:upper:]' '[:lower:]')" in
-    release|minsizerel)
-        export UPGRADER_BUILD_TYPE=MinSizeRel
-        ;;
-esac
+# The upgrader is ALWAYS MinSizeRel, debug included. It is not a standalone
+# binary: firmware.py turns it into upgrader_firmware.h, which is compiled into
+# Booster -- so its size is spent out of Booster's 768K slot (C-01). Building it
+# -Og for a debug run would inflate that header and push Booster over the limit,
+# and nobody debugs the upgrader through Booster anyway.
+export UPGRADER_BUILD_TYPE=MinSizeRel
 echo "Upgrader build type: $UPGRADER_BUILD_TYPE"
 
 # Booster is built MinSizeRel for release flows (decision D-04). With -O3 and
@@ -60,7 +68,7 @@ cd ..
 # Build the term
 echo "Building term project"
 cd term/atarist
-./build.sh $(PWD) release
+./build.sh "$PWD" release
 cd ../..
 
 # Build the booster project

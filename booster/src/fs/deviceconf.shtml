@@ -10,10 +10,10 @@
 },
 {
 "name": "APPS_CATALOG_URL",
-"label": "Apps catalog URL",
+"label": "Micro-firmware releases",
 "type": "STRING",
 "value": "<!--#APPSURL-->",
-"placeholder": "URL to the apps catalog"
+"placeholder": "Which micro-firmware releases to offer, or a catalog URL of your own"
 },
 {
 "name": "BOOT_FEATURE",
