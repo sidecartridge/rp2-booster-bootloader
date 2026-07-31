@@ -10,6 +10,7 @@ _In development. Sections below are filled in as epics land and finalised at tag
 - The apps catalog has moved to `https://md-store.sidecartridge.com/atari-st/apps.json`.
 - Each microfirmware on the Apps page now shows who made it, and a **Creator** filter sits alongside Platform and Features. Creators who publish a website get a small link icon on their filter chip. Microfirmwares published without creator information are shown as SidecarTridge.
 - New **Release type** filter on the Apps page: **All**, **Stable** and **Beta**. Stable hides beta versions, Beta shows only beta versions, and All shows everything. It filters the list you already have, and does not change which catalog is loaded.
+- **Deploy API for microfirmware developers.** A `.uf2` can be pushed to the device over WiFi and launched with two `curl` calls, instead of needing a debug probe or the USB/BOOTSEL dance. It is off unless you install the DEV APP and stay on the Development channel, and a red banner appears on every page while it is on. Documented in [`docs/DEPLOY-API.md`](docs/DEPLOY-API.md), including a Makefile target. See the security note below before enabling it.
 
 ### Changes
 - Booster is built as `MinSizeRel` for release flows. Linking TLS costs about 121 KB of flash, and `-O3` no longer fits the 768 KB slot.
@@ -25,6 +26,7 @@ _In development. Sections below are filled in as epics land and finalised at tag
 ### Security
 - **HTTPS on the device is encrypted but not authenticated.** Certificates are not verified: the device has no CA bundle and no real-time clock, so certificate validity cannot be checked. Downloads it performs itself — microfirmware binaries and the firmware OTA — are protected against passive eavesdropping on the network, but **not** against an active man-in-the-middle who can substitute content. Do not treat an `https://` binary URL as proof of origin. (The apps catalog is fetched by your browser rather than the device, so it does get normal certificate verification.)
 - The MD5 check on a downloaded microfirmware is an integrity check, not a signature. It confirms the stored bytes match what the catalog said to expect, catching truncation and corruption. Because the expected hash arrives from the same catalog over the same connection as the binary, it does not establish authenticity.
+- **The developer deploy API is not authenticated.** While it is enabled, anyone who can reach the device on your network can install and run code on it, and that code runs on a cartridge attached to your Atari's bus. The web UI is served over plain `http`, so the connection is not protected either. Requiring the DEV APP to be installed and the Development channel to be selected makes switching it on deliberate and visible; it is not a security boundary. Enable it only on a network you trust, and switch it off when you are done. An uploaded binary is not hash-checked, because the catalog's MD5 describes the placeholder it replaced.
 - Verified certificates remain planned but are not in this release.
 
 ---
