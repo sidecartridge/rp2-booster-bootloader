@@ -384,6 +384,19 @@
       </span>
       <button class="banner-close" @click="show = false" aria-label="Close">&times;</button>
     </div>
+    <!-- Development mode. Not dismissible: the other banners close because they
+         are transient, this one describes a standing state and a closed banner
+         is a forgotten one. Reflects the firmware's own gate check (DEVMODE),
+         not anything the page infers for itself. -->
+    <div class="banner banner-error" x-show="'<!--#DEVMODE-->' === 'Yes'" x-cloak>
+      <i class="fas fa-exclamation-triangle banner-icon"></i>
+      <span>
+        <strong>DEVELOPMENT MODE.</strong> Remote firmware upload is enabled on this device.
+        Anyone on this network can install and run code on it. To turn it off, switch the
+        release catalog away from Development on the <a href="/mngr_config.shtml">Config</a>
+        page, or delete the DEV APP.
+      </span>
+    </div>
     <h2>Wifi configuration</h2>
     <p>Modify your wifi settings here.</p>
 

@@ -8,6 +8,8 @@
 
 #include "mngr_httpd.h"
 
+#include "devapi.h"
+
 #define WIFI_PASS_BUFSIZE 64
 static char *ssid = NULL;
 static char *pass = NULL;
@@ -193,7 +195,7 @@ static const char *ssi_tags[] = {
     "APPSURL",   // 17 - Apps Catalog URL
     "NVERSION",  // 18 - New Version
     "NVERSTR",   // 19 - New Version String
-    "PLHLDR11",  // 20 - Placeholder 11
+    "DEVMODE",   // 20 - Developer deploy API enabled (EPIC-05)
     "PLHLDR12",  // 21 - Placeholder 12
     "PLHLDR13",  // 22 - Placeholder 13
     "PLHLDR14",  // 23 - Placeholder 14
@@ -943,6 +945,16 @@ static u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen
     case 19: /* NVERSTR */
     {
       printed = snprintf(pcInsert, iInsertLen, "%s", version_get_string());
+      break;
+    }
+    case 20: /* DEVMODE */
+    {
+      // Reports the REAL gate, evaluated by the firmware: the development app
+      // is installed AND the Development channel is selected. The page must
+      // not infer either half for itself -- a banner that disagrees with what
+      // the device accepts is worse than no banner.
+      printed = snprintf(pcInsert, iInsertLen, "%s",
+                         devapi_isEnabled() ? "Yes" : "No");
       break;
     }
     case 40: /* WDHCP */
