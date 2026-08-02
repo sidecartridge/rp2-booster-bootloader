@@ -18,7 +18,10 @@ static SettingsConfigEntry defaultEntries[] = {
     {PARAM_WIFI_MODE, SETTINGS_TYPE_INT, "0"},
     {PARAM_WIFI_NETMASK, SETTINGS_TYPE_STRING, ""},
     {PARAM_WIFI_PASSWORD, SETTINGS_TYPE_STRING, ""},
-    {PARAM_WIFI_POWER, SETTINGS_TYPE_INT, "0"},
+    // 4 = No Powersave: always-on radio, highest power draw. The device is
+    // mains-powered through the cartridge port, so trading power for a radio
+    // that never sleeps is the right default here.
+    {PARAM_WIFI_POWER, SETTINGS_TYPE_INT, "4"},
     {PARAM_WIFI_RSSI, SETTINGS_TYPE_BOOL, "true"},
     {PARAM_WIFI_SCAN_SECONDS, SETTINGS_TYPE_INT, "10"},
     {PARAM_WIFI_SSID, SETTINGS_TYPE_STRING, ""}};
