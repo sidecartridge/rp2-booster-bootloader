@@ -1,8 +1,8 @@
 # Changelog
 
-## v2.3.0 (unreleased)
+## v2.3.0 (2026-08-02) - release
 
-_In development. Sections below are filled in as epics land and finalised at tag time._
+This release moves downloads to HTTPS and the apps catalog to the new SidecarTridge store. The Apps page gains filters for who made a microfirmware and how tested it is, and developers get a way to deploy a microfirmware over WiFi without a debug probe.
 
 ### New features
 - Downloads now work over both `http://` and `https://` from a single firmware image, chosen per request from the URL scheme. Microfirmware installs and the firmware OTA both use it.
