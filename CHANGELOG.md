@@ -23,6 +23,9 @@ This release moves downloads to HTTPS and the apps catalog to the new SidecarTri
 - Devices already using one of the standard catalog channels are switched to the new store automatically on upgrade. A custom catalog URL is never modified.
 - The Development channel now points at the new store and works. The Beta channel points there too but the store does not publish that catalog yet, so selecting it shows an empty list until it does.
 
+### Fixes
+- The **WiFi power** setting now defaults to **No Powersave**, an always-on radio. It previously defaulted to Disabled PM, which also disables power saving but leaves the radio's listen intervals in place. Existing devices keep whatever they have configured; this only changes new devices and factory resets.
+
 ### Security
 - **HTTPS on the device is encrypted but not authenticated.** Certificates are not verified: the device has no CA bundle and no real-time clock, so certificate validity cannot be checked. Downloads it performs itself — microfirmware binaries and the firmware OTA — are protected against passive eavesdropping on the network, but **not** against an active man-in-the-middle who can substitute content. Do not treat an `https://` binary URL as proof of origin. (The apps catalog is fetched by your browser rather than the device, so it does get normal certificate verification.)
 - The MD5 check on a downloaded microfirmware is an integrity check, not a signature. It confirms the stored bytes match what the catalog said to expect, catching truncation and corruption. Because the expected hash arrives from the same catalog over the same connection as the binary, it does not establish authenticity.

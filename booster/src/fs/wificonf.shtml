@@ -20,7 +20,7 @@
             "label": "Wifi Power",
             "type": "INT",
             "value": "<!--#WPWR-->",
-            "placeholder": "Enter 0 for low power, 1 for high power"
+            "placeholder": "0 Disabled PM, 1 Performance, 2 Aggressive, 3 Default, 4 No Powersave"
         },
         {
             "name": "WIFI_RSSI",
