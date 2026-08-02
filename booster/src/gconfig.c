@@ -119,8 +119,14 @@ static const struct {
 } CATALOG_URL_MIGRATIONS[] = {
     {"http://atarist.sidecartridge.com/apps.json",
      "https://md-store.sidecartridge.com/atari-st/apps.json"},
+    // Source stays apps-beta.json: that is the literal string shipped firmware
+    // wrote, and it cannot be revised after the fact. The target follows the
+    // Testing channel to apps-test.json, so a device migrating off the old
+    // host lands on a catalog that exists and that the Config dropdown still
+    // offers -- migrating it to apps-beta.json would strand it on a URL that
+    // 404s and is no longer selectable.
     {"http://atarist.sidecartridge.com/apps-beta.json",
-     "https://md-store.sidecartridge.com/atari-st/apps-beta.json"},
+     "https://md-store.sidecartridge.com/atari-st/apps-test.json"},
     {"http://atarist.sidecartridge.com/apps-dev.json",
      "https://md-store.sidecartridge.com/atari-st/apps-dev.json"},
 };

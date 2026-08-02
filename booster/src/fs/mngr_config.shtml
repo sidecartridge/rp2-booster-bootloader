@@ -51,7 +51,7 @@
             sdSpeedOptions: Array.from({ length: 24 }, (_, i) => (i + 1) * 1000),
             channelUrls: {
               stable: 'https://md-store.sidecartridge.com/atari-st/apps.json',
-              beta:   'https://md-store.sidecartridge.com/atari-st/apps-beta.json',
+              beta:   'https://md-store.sidecartridge.com/atari-st/apps-test.json',
               dev:    'https://md-store.sidecartridge.com/atari-st/apps-dev.json',
             },
             appsChannel: 'stable',
