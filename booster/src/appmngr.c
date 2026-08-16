@@ -37,6 +37,9 @@ static char redirect_url[APPMNGR_MAX_URL_SIZE] = {0};
 // The components of the request currently in flight, needed to resolve a
 // relative Location against the URL that produced it.
 static url_components_t active_components = {0};
+
+// Defined further down, next to get_tmp_filename_path().
+static void appmngr_cleanup_tmp_download_file(void);
 static DIR s_dir;
 static bool s_dir_opened = false;
 static char s_folder[256];
@@ -702,6 +705,31 @@ static void http_client_result_complete_fn(void *arg,
   DPRINTF("Requet complete: result %d len %u server_response %u err %d\n",
           httpc_result, rx_content_len, srv_res, err);
   req->complete = true;
+
+  // A redirect reaches here as a failure: we aborted the body deliberately, so
+  // err is ERR_ABRT and srv_res is the 30x. Neither is an error, and marking
+  // the download FAILED here would be fatal in a way that is easy to miss --
+  // mngr.c only calls appmngr_poll_download_app() while the status is
+  // IN_PROGRESS, so the re-issue in that function would never run at all.
+  // Hold the status at IN_PROGRESS and let the poll follow the redirect.
+  if (redirect_pending) {
+    DPRINTF("Redirect pending; holding the download open for the re-issue\n");
+    // Drop whatever the aborted transfer left behind. appmngr_start_download()
+    // truncates this file on its way through anyway, so this is belt and
+    // braces -- but relying on that ordering is how a partial body survives a
+    // future refactor. Safe here: the result callback runs in the same
+    // cooperative context as the main loop, so FatFs access is allowed.
+    appmngr_cleanup_tmp_download_file();
+    if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
+      download_firmware_status = DOWNLOAD_STATUS_IN_PROGRESS;
+      download_firmware_error = DOWNLOAD_OK;
+    } else {
+      download_status = DOWNLOAD_STATUS_IN_PROGRESS;
+      download_error = DOWNLOAD_OK;
+    }
+    return;
+  }
+
   if (err == ERR_OK) {
     if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
       download_firmware_status = DOWNLOAD_STATUS_COMPLETED;
@@ -719,7 +747,14 @@ static void http_client_result_complete_fn(void *arg,
       download_error = DOWNLOAD_HTTP_ERROR;
     }
   }
-  if (srv_res != 200) {
+  // Belt and braces, in case the headers callback never ran or missed the
+  // status line. Any 2xx is success: this used to demand exactly 200, which
+  // would have failed a legitimate 204 or 206. srv_res == 0 means the server
+  // response was never seen, so there is nothing to judge and err above
+  // already decided it.
+  bool status_ok = (srv_res >= 200 && srv_res < 300);
+  if (!status_ok && srv_res != 0) {
+    DPRINTF("Server response %u is not 2xx\n", (unsigned)srv_res);
     if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
       download_firmware_status = DOWNLOAD_STATUS_FAILED;
       download_firmware_error = DOWNLOAD_HTTP_ERROR;
@@ -733,6 +768,21 @@ static void http_client_result_complete_fn(void *arg,
 static void get_tmp_filename_path(char filename[256]) {
   snprintf(filename, 256, "%s/tmp.download",
            settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value);
+}
+
+/**
+ * @brief Close and delete the in-progress download file.
+ *
+ * Used when a transfer is abandoned -- a redirect being followed, or a
+ * failure -- so a partial body is never left where a later step could read it
+ * as a complete .uf2.
+ */
+static void appmngr_cleanup_tmp_download_file(void) {
+  char filename[256] = {0};
+  get_tmp_filename_path(filename);
+  f_close(&file);
+  f_chmod(filename, 0, AM_RDO);
+  f_unlink(filename);
 }
 
 static bool find_next_json_file(char *json, size_t max_len) {
