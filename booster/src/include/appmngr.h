@@ -54,6 +54,15 @@
 // expressed as UF2 so the value survives changes to the image layout.
 #define MAXIMUM_FIRMWARE_UF2_SIZE \
   ((PICO_FLASH_SIZE_BYTES * UF2_OVERHEAD_FACTOR) + UF2_FRAMING_SLACK)
+// Redirects are followed on both download paths, microfirmware and firmware
+// OTA. Five matches md-browser and is well past what real hosting chains use:
+// the GitHub release path this was written for takes two.
+#define APPMNGR_MAX_REDIRECT_HOPS 5
+
+// Holds a fully-resolved redirect target. Sized for the same worst case as
+// url_components.uri plus scheme and host.
+#define APPMNGR_MAX_URL_SIZE 1700
+
 #define MAX_TAGS 6
 #define MAX_DEVICES 6
 
@@ -96,7 +105,11 @@
 typedef struct {
   char protocol[16];
   char host[128];
-  char uri[256];
+  // A redirect target can be far longer than the URL originally requested.
+  // GitHub release assets end at a signed storage URL whose query string alone
+  // runs past 900 characters (SAS token plus JWT), so 256 truncated it and the
+  // follow-up request went to a mangled path.
+  char uri[1536];
   // Explicit port from a "host:port" URL, or 0 to let the scheme decide
   // (80 for http, 443 for https).
   uint16_t port;

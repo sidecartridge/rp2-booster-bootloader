@@ -22,7 +22,21 @@ static download_err_t download_firmware_error = DOWNLOAD_OK;
 static HTTPC_REQUEST_T request = {0};
 // Persistent storage for async HTTP request strings to avoid dangling pointers
 static char request_host_buf[256];
-static char request_uri_buf[512];
+static char request_uri_buf[1536];
+
+// --- Redirect following (EPIC-08) -------------------------------------
+// A 30x is detected in the headers callback, which aborts the body so no
+// redirect page is ever written to the destination file, and records the
+// target. appmngr_poll_download_app() re-issues from the main loop, once the
+// aborted connection is fully closed -- starting a new request from inside
+// the lwIP callback would reenter the stack.
+static bool redirect_pending = false;
+static bool following_redirect = false;
+static int redirect_hops = 0;
+static char redirect_url[APPMNGR_MAX_URL_SIZE] = {0};
+// The components of the request currently in flight, needed to resolve a
+// relative Location against the URL that produced it.
+static url_components_t active_components = {0};
 static DIR s_dir;
 static bool s_dir_opened = false;
 static char s_folder[256];
@@ -152,7 +166,15 @@ static int parse_url(const char *url, url_components_t *components) {
     strncpy(components->host, host_start, host_len);
     components->host[host_len] = '\0';
 
-    // Copy the URI
+    // Copy the URI. Refuse rather than truncate: a silently shortened path
+    // becomes a request for the wrong resource, and on a redirect chain that
+    // means downloading something other than what was asked for. The measured
+    // worst case is a GitHub release asset at 919 characters.
+    if (strlen(uri_start) >= sizeof(components->uri)) {
+      DPRINTF("URI too long for the buffer: %u >= %u\n",
+              (unsigned)strlen(uri_start), (unsigned)sizeof(components->uri));
+      return -1;
+    }
     strncpy(components->uri, uri_start, sizeof(components->uri) - 1);
   } else {
     // No URI, only host
@@ -497,6 +519,70 @@ static err_t http_client_receive_file_fn(__unused void *arg,
   return ERR_OK;
 }
 
+/**
+ * @brief Find a header's value by name, case-insensitively.
+ *
+ * Ported from md-browser's download.c. Walks CRLF-delimited lines rather than
+ * using strstr on the whole block, so a header name appearing inside another
+ * header's value cannot match.
+ */
+static bool appmngr_find_header_value(const char *headers, const char *name,
+                                      char *out, size_t out_len) {
+  size_t name_len = strlen(name);
+  const char *line = headers;
+  while (line != NULL && *line != '\0') {
+    if (strncasecmp(line, name, name_len) == 0) {
+      const char *value = line + name_len;
+      while (*value == ' ' || *value == '\t') {
+        value++;
+      }
+      size_t len = strcspn(value, "\r\n");
+      if (len == 0 || len >= out_len) {
+        return false;  // absent, or too long to use safely
+      }
+      memcpy(out, value, len);
+      out[len] = '\0';
+      return true;
+    }
+    line = strstr(line, "\r\n");
+    if (line != NULL) {
+      line += 2;
+    }
+  }
+  return false;
+}
+
+/**
+ * @brief Turn a Location value into an absolute URL.
+ *
+ * Location may be absolute, host-relative ("/path"), or path-relative
+ * ("file.uf2"). Resolved against the request that produced it, which is why
+ * active_components is kept.
+ */
+static void appmngr_resolve_redirect_url(const char *location, char *out,
+                                         size_t out_len) {
+  char host_port[160];
+  if (active_components.port != 0) {
+    snprintf(host_port, sizeof(host_port), "%s:%u", active_components.host,
+             active_components.port);
+  } else {
+    snprintf(host_port, sizeof(host_port), "%s", active_components.host);
+  }
+
+  if (strstr(location, "://") != NULL) {
+    snprintf(out, out_len, "%s", location);
+  } else if (location[0] == '/') {
+    snprintf(out, out_len, "%s://%s%s", active_components.protocol, host_port,
+             location);
+  } else {
+    const char *last_slash = strrchr(active_components.uri, '/');
+    int base_len =
+        last_slash ? (int)(last_slash - active_components.uri) + 1 : 0;
+    snprintf(out, out_len, "%s://%s%.*s%s", active_components.protocol,
+             host_port, base_len, active_components.uri, location);
+  }
+}
+
 // Function to parse headers and check Content-Length
 static err_t http_client_header_check_size_fn(
     __unused httpc_state_t *connection, __unused void *arg, struct pbuf *hdr,
@@ -509,10 +595,73 @@ static err_t http_client_header_check_size_fn(
                            ? MAXIMUM_FIRMWARE_UF2_SIZE
                            : MAXIMUM_APP_UF2_SIZE;
 
-  char buf[512];
+  // Static, and large enough for a real redirect chain. A GitHub release
+  // asset's Location header alone runs past 900 characters, so the old 512
+  // stack buffer would have truncated the header block before the Location
+  // could be read -- and 2KB on an lwIP callback stack is not something to
+  // take.
+  static char buf[2048];
   u16_t copy = hdr_len < sizeof(buf) - 1 ? hdr_len : (sizeof(buf) - 1);
   pbuf_copy_partial(hdr, buf, copy, 0);
   buf[copy] = '\0';
+
+  // If the block was truncated, cut back to the last complete CRLF. Without
+  // this a header split by the cut would be parsed as if the remainder were
+  // its whole value -- a truncated Location would then be followed as a real
+  // URL. Dropping the partial line makes the failure clean instead: the
+  // header is simply not found. Real chains put Location early (byte 94 of
+  // 5189 on the GitHub release path), so this only matters for a pathological
+  // server.
+  if (hdr_len > copy) {
+    char *last_crlf = strrchr(buf, '\n');
+    if (last_crlf != NULL) {
+      last_crlf[1] = '\0';
+    }
+  }
+
+  // Parse the status line ("HTTP/1.x NNN ..."); lwIP hands us the headers
+  // pbuf from the first byte of the response.
+  int http_status = 0;
+  if (strncmp(buf, "HTTP/", 5) == 0) {
+    const char *status_start = strchr(buf, ' ');
+    if (status_start != NULL) {
+      http_status = atoi(status_start + 1);
+    }
+  }
+
+  // Redirects: record the target and abort the body. The re-issue happens in
+  // appmngr_poll_download_app() from the main loop (EPIC-08).
+  if (http_status == 301 || http_status == 302 || http_status == 303 ||
+      http_status == 307 || http_status == 308) {
+    if (redirect_hops >= APPMNGR_MAX_REDIRECT_HOPS) {
+      DPRINTF("Redirect limit (%d) exceeded\n", APPMNGR_MAX_REDIRECT_HOPS);
+    } else {
+      char location[APPMNGR_MAX_URL_SIZE];
+      if (appmngr_find_header_value(buf, "Location:", location,
+                                    sizeof(location))) {
+        appmngr_resolve_redirect_url(location, redirect_url,
+                                     sizeof(redirect_url));
+        DPRINTF("HTTP %d redirect to: %s\n", http_status, redirect_url);
+        redirect_pending = true;
+        return ERR_ABRT;  // kill the body; poll follows the redirect
+      }
+      DPRINTF("HTTP %d without a usable Location header\n", http_status);
+    }
+    // fall through to the non-2xx abort below
+  }
+
+  // Only 2xx carries the content we asked for. Anything else must be aborted
+  // before the body arrives, or an error page gets written to the file and
+  // treated as firmware. The microfirmware path would catch that with its
+  // MD5, but the OTA path has no hash at all.
+  if (http_status < 200 || http_status >= 300) {
+    DPRINTF("HTTP status %d: aborting before the body\n", http_status);
+    if (download_type == DOWNLOAD_TYPE_FIRMWARE)
+      download_firmware_status = DOWNLOAD_STATUS_FAILED;
+    else
+      download_status = DOWNLOAD_STATUS_FAILED;
+    return ERR_ABRT;
+  }
 
   const char *label = "Content-Length:";
   char *p = buf;
@@ -1825,9 +1974,30 @@ download_err_t appmngr_start_download(const char *url) {
     return DOWNLOAD_CANNOTWRITEFILE_ERROR;
   }
 
+  // A fresh download starts the hop count over; a redirect re-issue must not.
+  if (!following_redirect) {
+    redirect_hops = 0;
+  }
+
   // Get the components of a url
   url_components_t components;
-  if (url == NULL || strlen(url) == 0) {
+  if (following_redirect) {
+    // Re-issuing after a 30x. The URL comes from the Location header, and
+    // download_type must stay as it was: passing a URL through the branch
+    // below would silently reclassify a microfirmware download as a firmware
+    // OTA, which changes the size cap and the completion handling.
+    if (parse_url(redirect_url, &components) != 0) {
+      DPRINTF("Error parsing redirect URL: %s\n", redirect_url);
+      return DOWNLOAD_CANNOTPARSEURL_ERROR;
+    }
+    if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
+      download_firmware_status = DOWNLOAD_STATUS_STARTED;
+      download_firmware_error = DOWNLOAD_OK;
+    } else {
+      download_status = DOWNLOAD_STATUS_STARTED;
+      download_error = DOWNLOAD_OK;
+    }
+  } else if (url == NULL || strlen(url) == 0) {
     if (parse_url(app_info.binary, &components) != 0) {
       DPRINTF("Error parsing URL of app_info.binary: %s\n", app_info.binary);
       return DOWNLOAD_CANNOTPARSEURL_ERROR;
@@ -1844,6 +2014,10 @@ download_err_t appmngr_start_download(const char *url) {
     download_firmware_status = DOWNLOAD_STATUS_STARTED;
     download_firmware_error = DOWNLOAD_OK;
   }
+  // Remember what we are about to request: a relative Location is resolved
+  // against it (components itself is on the stack).
+  active_components = components;
+
   // Copy host and URI into persistent buffers (components is on stack)
   snprintf(request_host_buf, sizeof(request_host_buf), "%s", components.host);
   snprintf(request_uri_buf, sizeof(request_uri_buf), "%s", components.uri);
@@ -1895,6 +2069,27 @@ download_poll_t appmngr_poll_download_app() {
   if (!request.complete) {
     async_context_poll(cyw43_arch_async_context());
     async_context_wait_for_work_ms(cyw43_arch_async_context(), 10);
+    return DOWNLOAD_POLL_CONTINUE;
+  }
+  if (redirect_pending) {
+    // Followed here rather than in the headers callback: the previous
+    // connection is only fully closed once request.complete is set, and
+    // starting a new request from inside an lwIP callback reenters the stack.
+    redirect_pending = false;
+    redirect_hops++;
+    DPRINTF("Following redirect %d/%d\n", redirect_hops,
+            APPMNGR_MAX_REDIRECT_HOPS);
+    following_redirect = true;
+    download_err_t err = appmngr_start_download(NULL);
+    following_redirect = false;
+    if (err != DOWNLOAD_OK) {
+      DPRINTF("Redirect re-issue failed: %d\n", err);
+      if (download_type == DOWNLOAD_TYPE_FIRMWARE)
+        download_firmware_status = DOWNLOAD_STATUS_FAILED;
+      else
+        download_status = DOWNLOAD_STATUS_FAILED;
+      return DOWNLOAD_POLL_COMPLETED;
+    }
     return DOWNLOAD_POLL_CONTINUE;
   }
   return DOWNLOAD_POLL_COMPLETED;

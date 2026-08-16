@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.3.1 (unreleased)
+
+Patch release. Firmware only.
+
+### Fixes
+- **Downloads now follow HTTP redirects.** A microfirmware or firmware URL that answers with 301, 302, 303, 307 or 308 is now followed to its target, up to 5 hops. Previously the redirect response was treated as the file itself, so the download either failed its integrity check or, for the firmware update, wrote a redirect page where firmware should have been. This affects both `http://` and `https://`.
+- Responses other than 2xx are now rejected before their body is read, so an error page can never be written to the SD card as a microfirmware.
+- URLs up to 1536 characters are accepted. Redirects to signed storage URLs, such as a GitHub release asset, carry long tokens in the query string and were previously cut short.
+
+---
+
 ## v2.3.0 (2026-08-02) - release
 
 This release moves downloads to HTTPS and the apps catalog to the new SidecarTridge store. The Apps page gains filters for who made a microfirmware and how tested it is, and developers get a way to deploy a microfirmware over WiFi without a debug probe.
