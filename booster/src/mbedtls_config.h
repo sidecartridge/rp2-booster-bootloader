@@ -7,12 +7,24 @@
 #define MBEDTLS_NO_PLATFORM_ENTROPY
 #define MBEDTLS_ENTROPY_HARDWARE_ALT
 
-// Asymmetric TLS record buffers. The IN buffer MUST be the full 16KB: TLS
-// peers send records up to 16KB (real servers do, for both certificate chains
-// and data), and mbedTLS cannot receive a record larger than this buffer --
-// with 4KB the handshake dies on real certificate chains and data transfer
-// hangs on 16KB records. The OUT buffer stays small: our requests are tiny.
-// Costs ~16KB heap per TLS session; only one session runs at a time.
+// Asymmetric TLS record buffers. The IN buffer MUST be the full 16KB, and
+// this is now confirmed from both directions rather than assumed:
+//
+//   - 8192 was tried (EPIC-08, 2026-08-16) to free heap for the TLS 1.2
+//     ECDHE-RSA handshake. The handshake then fit, but EVERY download failed
+//     with DOWNLOAD_HTTP_ERROR: servers send bulk data in records up to the
+//     16KB protocol maximum, mbedTLS cannot receive a record larger than this
+//     buffer, so the first big record killed the connection mid-transfer and
+//     lwIP reported it as a content-length mismatch.
+//   - With 4KB (EPIC-01) the handshake already died on real certificate
+//     chains.
+//
+// So this buffer cannot fund the handshake's memory. The RSA-2048
+// verification peak (confirmed by backtrace: calloc panic inside
+// mbedtls_mpi_grow under ssl_parse_server_key_exchange) is paid for instead
+// by gating redirect re-issues on the previous session's memory actually
+// being freed -- see appmngr_poll_download_app(). The OUT buffer stays small:
+// our requests are tiny. Costs ~20KB heap per TLS session; one at a time.
 #define MBEDTLS_SSL_RENEGOTIATION 0
 #define MBEDTLS_SSL_IN_CONTENT_LEN 16384
 #define MBEDTLS_SSL_OUT_CONTENT_LEN 4096

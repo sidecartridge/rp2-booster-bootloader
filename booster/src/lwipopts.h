@@ -21,7 +21,17 @@
 #endif
 
 #define MEM_ALIGNMENT 4
-#define MEM_SIZE 4096
+// lwIP's own heap (static bss, separate from the C heap where mbedTLS
+// lives). 8192, arrived at from both directions:
+//
+//   - 4096 starves when a redirect lands on a signed storage URL: the
+//     919-char request occupies ~2.4KB here once queued, and while it sits
+//     the device's own httpd -- which transmits from this same pool -- stops
+//     answering. The only configuration that ever completed the 3-hop GitHub
+//     chain ran with 8192.
+//   - 16384 was also tried and panicked the C heap at the first boot-time
+//     TLS handshake; that failure belonged to 16384, not 8192.
+#define MEM_SIZE 8192
 
 #if defined(_DEBUG) && (_DEBUG != 0)
 #define MEM_SANITY_CHECK 1

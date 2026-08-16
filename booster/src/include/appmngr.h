@@ -59,6 +59,15 @@
 // the GitHub release path this was written for takes two.
 #define APPMNGR_MAX_REDIRECT_HOPS 5
 
+// How long to let lwIP finish tearing down an aborted redirect response
+// before opening the next connection. Without this the two overlap and the
+// new handshake stalls until the poll timeout.
+// Minimum spacing between closing one hop's connection and opening the next.
+// Empirical and load-bearing: reconnecting within a few milliseconds yields a
+// connection that receives nothing and times out. Debug builds get this
+// spacing for free from UART logging.
+#define APPMNGR_REDIRECT_SETTLE_MS 500
+
 // Holds a fully-resolved redirect target. Sized for the same worst case as
 // url_components.uri plus scheme and host.
 #define APPMNGR_MAX_URL_SIZE 1700

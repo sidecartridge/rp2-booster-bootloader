@@ -34,12 +34,18 @@ static bool redirect_pending = false;
 static bool following_redirect = false;
 static int redirect_hops = 0;
 static char redirect_url[APPMNGR_MAX_URL_SIZE] = {0};
+// Re-issuing in the same tick as the abort collides with lwIP still tearing
+// the previous connection down. See appmngr_poll_download_app().
+static bool redirect_settling = false;
+static absolute_time_t redirect_retry_time;
 // The components of the request currently in flight, needed to resolve a
 // relative Location against the URL that produced it.
 static url_components_t active_components = {0};
 
 // Defined further down, next to get_tmp_filename_path().
 static void appmngr_cleanup_tmp_download_file(void);
+
+
 static DIR s_dir;
 static bool s_dir_opened = false;
 static char s_folder[256];
@@ -475,6 +481,11 @@ static err_t http_client_receive_file_fn(__unused void *arg,
                                          struct pbuf *p, err_t err) {
   if (p == NULL) {
     DPRINTF("End of data or connection closed by the server.\n");
+    if (redirect_pending) {
+      // The redirect response ended. Leave the status alone; the result
+      // callback holds it IN_PROGRESS and the poll re-issues.
+      return ERR_OK;
+    }
     if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
       download_firmware_status = DOWNLOAD_STATUS_COMPLETED;
     } else {
@@ -491,6 +502,13 @@ static err_t http_client_receive_file_fn(__unused void *arg,
       download_status = DOWNLOAD_STATUS_FAILED;
     pbuf_free(p);
     return err;
+  }
+
+  // A redirect response's body is not the file. Discard it: the request will
+  // be re-issued against the Location target once this connection closes.
+  if (redirect_pending) {
+    pbuf_free(p);
+    return ERR_OK;
   }
 
   // Stream the pbuf chain to file: no malloc, no large copies
@@ -646,7 +664,15 @@ static err_t http_client_header_check_size_fn(
                                      sizeof(redirect_url));
         DPRINTF("HTTP %d redirect to: %s\n", http_status, redirect_url);
         redirect_pending = true;
-        return ERR_ABRT;  // kill the body; poll follows the redirect
+        // Deliberately NOT ERR_ABRT. Aborting made lwIP tear the connection
+        // down hard, and after two of those the stack stopped serving
+        // anything at all: the third request never completed a handshake and
+        // the device's own web server stopped responding too. A 302 body is a
+        // few bytes or nothing, so letting the response finish and the
+        // connection close normally costs nothing and keeps lwIP's state
+        // machine on the path it is designed for. The body is discarded in
+        // http_client_receive_file_fn.
+        return ERR_OK;
       }
       DPRINTF("HTTP %d without a usable Location header\n", http_status);
     }
@@ -747,6 +773,24 @@ static void http_client_result_complete_fn(void *arg,
       download_error = DOWNLOAD_HTTP_ERROR;
     }
   }
+  // httpc_result is the authoritative outcome and must be checked FIRST. A
+  // timeout arrives as HTTPC_RESULT_ERR_TIMEOUT with err == ERR_OK and
+  // srv_res == 0, so judging on err and srv_res alone marks a transfer that
+  // received nothing as COMPLETED -- which is exactly how a zero-byte file
+  // reached the MD5 check and failed there instead of at the download.
+  if (httpc_result != HTTPC_RESULT_OK) {
+    DPRINTF("Transfer did not complete: httpc_result %d\n", httpc_result);
+    if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
+      download_firmware_status = DOWNLOAD_STATUS_FAILED;
+      download_firmware_error = DOWNLOAD_HTTP_ERROR;
+    } else {
+      download_status = DOWNLOAD_STATUS_FAILED;
+      download_error = DOWNLOAD_HTTP_ERROR;
+    }
+    appmngr_cleanup_tmp_download_file();
+    return;
+  }
+
   // Belt and braces, in case the headers callback never ran or missed the
   // status line. Any 2xx is success: this used to demand exactly 200, which
   // would have failed a legitimate 204 or 206. srv_res == 0 means the server
@@ -2125,6 +2169,23 @@ download_poll_t appmngr_poll_download_app() {
     // Followed here rather than in the headers callback: the previous
     // connection is only fully closed once request.complete is set, and
     // starting a new request from inside an lwIP callback reenters the stack.
+    //
+    // The settle delay is empirical and load-bearing. Opening the next
+    // connection within a few milliseconds of the previous close yields a
+    // connection that receives nothing and dies on lwIP's 15 second poll
+    // timeout. Debug builds get this spacing for free from UART logging,
+    // which is why an undelayed build passed with traces and failed without.
+    if (!redirect_settling) {
+      redirect_settling = true;
+      redirect_retry_time = make_timeout_time_ms(APPMNGR_REDIRECT_SETTLE_MS);
+      return DOWNLOAD_POLL_CONTINUE;
+    }
+    if (absolute_time_diff_us(get_absolute_time(), redirect_retry_time) > 0) {
+      async_context_poll(cyw43_arch_async_context());
+      async_context_wait_for_work_ms(cyw43_arch_async_context(), 10);
+      return DOWNLOAD_POLL_CONTINUE;
+    }
+    redirect_settling = false;
     redirect_pending = false;
     redirect_hops++;
     DPRINTF("Following redirect %d/%d\n", redirect_hops,
