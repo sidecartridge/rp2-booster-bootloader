@@ -70,6 +70,18 @@ void select_coreWaitPush(reset_callback_t reset, reset_callback_t resetLong);
 void select_coreWaitPushDisable();
 
 /**
+ * @brief Park core 1 in its RAM-resident lockout handler before a flash
+ * erase/program, and release it afterwards.
+ *
+ * Core 1 runs the SELECT watcher, which touches flash-resident code
+ * (sleep_ms, select_detectPush) on every iteration. Any flash operation on
+ * core 0 must hold this lockout or core 1 double-faults on an XIP fetch.
+ * No-ops when the watcher core is stopped.
+ */
+void select_flashLockoutBegin(void);
+void select_flashLockoutEnd(void);
+
+/**
  * @brief Monitors for reset trigger.
  *
  * Monitors for a SELECT button push intended to trigger a device reset.

@@ -285,6 +285,13 @@
    return 0;
  }
  
+ // Provided by the application (select.c): parks core 1 -- which runs the
+ // SELECT watcher and touches flash-resident code -- in its RAM lockout
+ // handler while flash is unavailable. Weak no-op fallbacks keep this library
+ // linkable in binaries that have no core-1 watcher (e.g. the upgrader).
+ __attribute__((weak)) void select_flashLockoutBegin(void) {}
+ __attribute__((weak)) void select_flashLockoutEnd(void) {}
+
  int settings_save(SettingsContext *ctx, bool disable_interrupts) {
    if (!ctx) return -1;
  
@@ -304,10 +311,12 @@
      ints = save_and_disable_interrupts();
    }
  
+   select_flashLockoutBegin();
    flash_range_erase(ctx->flashSettingsOffset, ctx->flashSettingsSize);
    flash_range_program(ctx->flashSettingsOffset,
                        (uint8_t *)ctx->configData.entries,
                        ctx->flashSettingsSize);
+   select_flashLockoutEnd();
  
    if (disable_interrupts) {
      restore_interrupts(ints);
@@ -320,9 +329,11 @@
    if (!ctx) return -1;
  
    // Erase the flash region
+   select_flashLockoutBegin();
    uint32_t ints = save_and_disable_interrupts();
    flash_range_erase(ctx->flashSettingsOffset, ctx->flashSettingsSize);
    restore_interrupts(ints);
+   select_flashLockoutEnd();
  
    // Free and reset
    if (ctx->configData.entries) {

@@ -374,7 +374,7 @@
   <!-- Main Content Area -->
   <main class="main-content-full-width">
     <!-- Informational banner if a new version is available -->
-    <div class="banner banner-info" x-data="{ show: true }" x-show="'<!--#NVERSION-->' === 'Yes' && show">
+    <div class="banner banner-info" x-data="{ show: true }" x-show="'<!--#NVERSION-->' === 'Yes' && show" x-cloak>
       <i class="fas fa-info-circle banner-icon"></i>
       <span>
         Firmware update available (<a target="_blank"
@@ -626,7 +626,7 @@
   <div x-data x-init="fetch('/system.shtml').then(r=>r.text()).then(h=>$el.outerHTML=h)"></div>
 
   <footer class="footer">
-    <p>&copy; 2025 GOODDATA LABS SLU. All rights reserved.</p>
+    <p>&copy; 2024-2026 GOODDATA LABS SLU. All rights reserved.</p>
   </footer>
 </body>
 

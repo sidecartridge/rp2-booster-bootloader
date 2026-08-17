@@ -7,6 +7,7 @@
  */
 
 #include "fabric.h"
+#include "select.h"
 
 static int wait_for_reboot = 2;
 static int wait_poll_interval_ms = 1000;
@@ -95,10 +96,12 @@ int fabric_init() {
       "bytes\n",
       (unsigned int)&_config_flash_start, total_config_flash_length);
   // Erase the configuration and lookup tables previously used
+  select_flashLockoutBegin();
   uint32_t ints = save_and_disable_interrupts();
   flash_range_erase((unsigned int)&_config_flash_start - XIP_BASE,
                     total_config_flash_length);
   restore_interrupts(ints);
+  select_flashLockoutEnd();
   DPRINTF("Configuration and lookup tables erased\n");
 
   // First, check if there is a Wifi configuration file in the microSD card.

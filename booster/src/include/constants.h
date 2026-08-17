@@ -29,6 +29,13 @@
 #define FIRMWARE_BINARY_URL SIDECART_BASE_URL "/upgrade.bin"
 #endif
 
+// URL of the MD5 checksum for upgrade.bin. REQUIRED: the upgrade is refused if
+// this file is missing, unreachable or malformed, so a release must always
+// publish it alongside upgrade.bin (build.sh generates it).
+#ifndef FIRMWARE_MD5_URL
+#define FIRMWARE_MD5_URL SIDECART_BASE_URL "/upgrade.md5"
+#endif
+
 // URL to fetch the VERSION file (can be overridden at compile time)
 #ifndef VERSION_URL
 #define VERSION_URL SIDECART_BASE_URL "/SIDECARTVERSION"

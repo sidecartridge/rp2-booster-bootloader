@@ -120,6 +120,16 @@ if [ "$BUILD_TYPE" = "release" ]; then
     cp ./dist/rp-booster-all.uf2 ./dist/rp-booster-$VERSION-full.uf2
     mv ./dist/rp-booster-all.uf2 ./dist/upgrade.bin
     cp version.txt ./dist/SIDECARTVERSION
+    # Checksum of the image, published alongside it. The device fetches this
+    # before upgrade.bin and refuses to flash an image that does not match.
+    # Bare digest, no filename: the device reads the first 32 characters.
+    if command -v md5sum >/dev/null 2>&1; then
+        md5sum ./dist/upgrade.bin | cut -d' ' -f1 > ./dist/upgrade.md5
+    else
+        # BSD/macOS
+        md5 -q ./dist/upgrade.bin > ./dist/upgrade.md5
+    fi
+    echo "upgrade.md5: $(cat ./dist/upgrade.md5)"
 else
     mv ./dist/rp-booster-all.uf2 ./dist/rp-booster-$VERSION-$BUILD_TYPE-full.uf2
 fi

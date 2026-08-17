@@ -54,6 +54,31 @@
 // expressed as UF2 so the value survives changes to the image layout.
 #define MAXIMUM_FIRMWARE_UF2_SIZE \
   ((PICO_FLASH_SIZE_BYTES * UF2_OVERHEAD_FACTOR) + UF2_FRAMING_SLACK)
+// Redirects are followed on both download paths, microfirmware and firmware
+// OTA. Five matches md-browser and is well past what real hosting chains use:
+// the GitHub release path this was written for takes two.
+#define APPMNGR_MAX_REDIRECT_HOPS 5
+
+// How long to let lwIP finish tearing down an aborted redirect response
+// before opening the next connection. Without this the two overlap and the
+// new handshake stalls until the poll timeout.
+// Times a single hop is re-issued after receiving nothing, before the whole
+// download is failed. A timed-out connection with every lwIP resource
+// satisfied means the peer did not answer -- an ordinary internet event.
+#define APPMNGR_MAX_HOP_RETRIES 2
+
+// Minimum spacing between closing one hop's connection and opening the next,
+// and between a timed-out attempt and its retry. Briefly raised to 2000 while
+// chasing the redirect download failures, on the theory that fast turnaround
+// corrupted lwIP state. That theory was wrong -- the cause was lwIP send-heap
+// exhaustion (see MEM_SIZE in lwipopts.h) -- so this is back to the original
+// 500. Cost is paid only on redirected installs.
+#define APPMNGR_REDIRECT_SETTLE_MS 500
+
+// Holds a fully-resolved redirect target. Sized for the same worst case as
+// url_components.uri plus scheme and host.
+#define APPMNGR_MAX_URL_SIZE 1700
+
 #define MAX_TAGS 6
 #define MAX_DEVICES 6
 
@@ -96,7 +121,11 @@
 typedef struct {
   char protocol[16];
   char host[128];
-  char uri[256];
+  // A redirect target can be far longer than the URL originally requested.
+  // GitHub release assets end at a signed storage URL whose query string alone
+  // runs past 900 characters (SAS token plus JWT), so 256 truncated it and the
+  // follow-up request went to a mangled path.
+  char uri[1536];
   // Explicit port from a "host:port" URL, or 0 to let the scheme decide
   // (80 for http, 443 for https).
   uint16_t port;
@@ -144,6 +173,19 @@ typedef enum {
   DOWNLOAD_STATUS_FAILED
 } download_status_t;
 
+// Coarse download stage for the progress UI. Distinct from download_status_t,
+// which returns to IDLE on success and says nothing during the synchronous
+// verify/install work after the transfer ends.
+typedef enum {
+  APPMNGR_PHASE_IDLE = 0,
+  APPMNGR_PHASE_CONNECT = 1,
+  APPMNGR_PHASE_DOWNLOAD = 2,
+  APPMNGR_PHASE_VERIFY = 3,
+  APPMNGR_PHASE_INSTALL = 4,
+  APPMNGR_PHASE_DONE = 5,
+  APPMNGR_PHASE_FAILED = 6,
+} appmngr_phase_t;
+
 typedef enum {
   DOWNLOAD_POLL_CONTINUE,
   DOWNLOAD_POLL_ERROR,
@@ -167,6 +209,8 @@ typedef enum {
   DOWNLOAD_CANNOTCREATE_CONFIG,
   DOWNLOAD_CANNOTDELETECONFIGSECTOR_ERROR,
   DOWNLOAD_HTTP_ERROR,
+  // Appended, not inserted: these values surface in the UI and in logs.
+  DOWNLOAD_MD5UNAVAILABLE_ERROR,
 } download_err_t;
 
 typedef enum {
@@ -208,6 +252,67 @@ download_launch_err_t appmngr_launch_app();
 download_err_t appmngr_start_download(const char *url);
 download_poll_t appmngr_poll_download_app();
 download_err_t appmngr_finish_download_app();
+/**
+ * @brief Hide or show the current transfer in the progress UI.
+ *
+ * Set false around internal fetches the user did not ask for (upgrade.md5),
+ * so they are reported as "connecting" with no byte counts instead of
+ * appearing as a finished 0 KB download.
+ */
+void appmngr_set_progress_reporting(bool enabled);
+
+/**
+ * @brief Bytes written so far and the total expected.
+ *
+ * @param received Bytes written to the destination file for the current hop.
+ * @param total Content-Length of the current hop, or 0 if the server did not
+ *              send one (render an indeterminate bar in that case).
+ */
+void appmngr_get_download_progress(uint32_t *received, uint32_t *total);
+
+/**
+ * @brief Cap the number of times a hop is retried after receiving nothing.
+ *
+ * Set to 0 around an optional fetch (upgrade.md5) where a 404 is a valid
+ * answer and retrying only adds delay. Restore to APPMNGR_MAX_HOP_RETRIES
+ * afterwards.
+ */
+void appmngr_set_max_hop_retries(int retries);
+
+/**
+ * @brief Read the just-downloaded temp file as an upgrade.md5 digest.
+ *
+ * Accepts a bare 32-character hex digest or md5sum's "<digest>  <name>" form.
+ *
+ * @return true if a valid digest was stored, false if the file was missing,
+ *         short or malformed. False is fatal: the upgrade is refused, since
+ *         the checksum is required.
+ */
+bool appmngr_load_expected_firmware_md5_from_tmp(void);
+
+/** @brief Forget any stored expected firmware digest. */
+void appmngr_clear_expected_firmware_md5(void);
+
+/** @brief Whether an expected firmware digest is currently held. */
+bool appmngr_has_expected_firmware_md5(void);
+
+/**
+ * @brief Hash the downloaded firmware image and compare against upgrade.md5.
+ *
+ * @return DOWNLOAD_OK when the digests match, DOWNLOAD_MD5MISMATCH_ERROR when
+ *         they differ, DOWNLOAD_MD5UNAVAILABLE_ERROR when no digest is held.
+ */
+download_err_t appmngr_verify_firmware_md5(void);
+
+/** @brief Close and delete the partial download file (web UI Cancel). */
+void appmngr_cleanup_download(void);
+
+/** @brief Current coarse download stage, for the progress page. */
+appmngr_phase_t appmngr_get_download_phase();
+
+/** @brief Publish the coarse download stage. Driven from the mngr main loop. */
+void appmngr_set_download_phase(appmngr_phase_t phase);
+
 download_status_t appmngr_get_download_status();
 download_err_t appmngr_get_download_error();
 
@@ -217,6 +322,15 @@ download_err_t appmngr_get_download_firmware_error();
 void appmngr_download_firmware_error(download_err_t err);
 
 const char *appmngr_get_download_error_str();
+
+/**
+ * @brief Human-readable text for a specific error code.
+ *
+ * Needed because appmngr_get_download_error_str() reads the app-download
+ * error, which is still DOWNLOAD_OK when it is the FIRMWARE download that
+ * failed -- reporting a firmware failure as "No error".
+ */
+const char *appmngr_download_error_to_str(download_err_t err);
 download_launch_err_t appmngr_get_launch_status();
 download_err_t appmngr_confirm_download_app();
 download_err_t appmngr_confirm_failed_download_app();

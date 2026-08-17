@@ -1,5 +1,33 @@
 # Changelog
 
+## v2.4.0 (2026-08-17) - release
+
+Firmware only. Installs and firmware updates are far more reliable, show real progress while they run, and the firmware update now checks the download before installing it.
+
+### New features
+- **You can see what an install is doing.** A progress bar with a percentage and size, the stage it has reached, and the name of the microfirmware being installed. It returns to the Apps page on its own when finished.
+- **Failed installs tell you why, and can be retried.** The page shows the reason and offers Retry or Cancel instead of a generic error page.
+- **Firmware updates are checked before installing.** The downloaded firmware is verified against a checksum published with it, and the update is refused if it does not match. It is also refused if the checksum is missing, so a damaged or incomplete download can never be flashed.
+- The firmware update page shows the same live progress, instead of a fixed two minute wait.
+
+### Fixes
+- Microfirmwares hosted on GitHub releases and similar services now install correctly. Downloads follow redirects, and an error page can never be saved as a microfirmware.
+- Installs no longer fail at random. A download that used to fail once and work on a later attempt now works first time.
+- The device no longer freezes while installing.
+- Browsing the web interface during a download can no longer corrupt the SD card.
+- A dropped connection is retried instead of failing the whole install.
+- Several installs in a row no longer slow down or stall.
+- A failed firmware update used to report "No error". It now shows the real reason.
+- The progress page no longer shows the size of the previous download.
+- The banners at the top of a page no longer all flash into view while it loads.
+- Copyright notices read 2024-2026 and match on every page.
+
+### Build
+- Releases publish `upgrade.md5` alongside `upgrade.bin`.
+- The `fatfs-sdk` and `pico-extras` references now match the versions the build scripts use.
+
+---
+
 ## v2.3.0 (2026-08-02) - release
 
 This release moves downloads to HTTPS and the apps catalog to the new SidecarTridge store. The Apps page gains filters for who made a microfirmware and how tested it is, and developers get a way to deploy a microfirmware over WiFi without a debug probe.

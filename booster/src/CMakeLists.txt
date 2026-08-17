@@ -271,7 +271,7 @@ if(NOT DEFINED RELEASE_DATE)
         set(RELEASE_DATE ${CURRENT_DATE_TIME})
 endif()
 
-if (NOT DEFINED _DEBUG)
+if (NOT DEFINED _DEBUG) 
         set(_DEBUG 0)
 endif()
 

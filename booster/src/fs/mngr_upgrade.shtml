@@ -63,36 +63,62 @@
               const msg = (startJson && startJson.message ? String(startJson.message).trim() : `HTTP ${res.status}`);
               throw new Error(msg);
             }
-            // Wait approximately two minutes while the device downloads the firmware
             this.phase = 'downloading';
-            // initialize and start download countdown
-            this.downloadSecondsRemaining = 120;
-            if (this.downloadIntervalId) { clearInterval(this.downloadIntervalId); }
-            this.downloadIntervalId = setInterval(() => {
-              if (this.downloadSecondsRemaining > 0) this.downloadSecondsRemaining--;
-            }, 1000);
-            setTimeout(async () => {
-              try {
-                // NOTE: If your endpoint is named differently, adjust here.
-                const chk = await fetch('/firmware_upgrade_downloaded.cgi', { method: 'GET' });
-                let chkJson = null;
-                try { chkJson = await chk.json(); } catch (_) { /* ignore JSON parse errors */ }
-                if (!chk.ok || !chkJson || typeof chkJson.status !== 'number' || chkJson.status !== 200) {
-                  const msg = (chkJson && chkJson.message ? String(chkJson.message).trim() : `HTTP ${chk.status}`);
-                  throw new Error(msg);
-                }
-                this.phase = 'ready';
-                if (this.downloadIntervalId) { clearInterval(this.downloadIntervalId); this.downloadIntervalId = null; }
-              } catch (e) {
-                this.errorMessage = e && e.message ? e.message : 'Download verification failed. Please try again later.';
-                this.phase = 'error';
-                if (this.downloadIntervalId) { clearInterval(this.downloadIntervalId); this.downloadIntervalId = null; }
-              }
-            }, 120000);
+            this.pollProgress();
           } catch (e) {
             this.errorMessage = e && e.message ? e.message : 'Failed to start the firmware download. Please try again later.';
             this.phase = 'error';
           }
+        },
+        // Poll the shared download-progress endpoint instead of guessing at a
+        // fixed two-minute wait. Phase numbers mirror appmngr_phase_t.
+        pollProgress() {
+          fetch('/dlstat.shtml', { cache: 'no-store' })
+            .then(r => r.text())
+            .then(t => {
+              const d = JSON.parse(t);
+              this.dlPct = d.pct;
+              this.dlRx = d.rx;
+              this.dlTot = d.tot;
+              this.dlPhase = d.ph;
+              if (d.ph === 6) {
+                this.errorMessage = d.msg || 'The firmware download failed.';
+                this.phase = 'error';
+                return;
+              }
+              if (d.ph === 5) {
+                this.confirmDownloaded();
+                return;
+              }
+              setTimeout(() => this.pollProgress(), 1000);
+            })
+            .catch(() => {
+              setTimeout(() => this.pollProgress(), 1000);
+            });
+        },
+        // The device reports the transfer finished; confirm with the existing
+        // endpoint before offering the install step.
+        async confirmDownloaded() {
+          try {
+            const chk = await fetch('/firmware_upgrade_downloaded.cgi', { method: 'GET' });
+            let chkJson = null;
+            try { chkJson = await chk.json(); } catch (_) { chkJson = null; }
+            if (!chk.ok || !chkJson || typeof chkJson.status !== 'number' || chkJson.status !== 200) {
+              const msg = (chkJson && chkJson.message ? String(chkJson.message).trim() : `HTTP ${chk.status}`);
+              throw new Error(msg);
+            }
+            this.phase = 'ready';
+          } catch (e) {
+            this.errorMessage = e && e.message ? e.message : 'Download verification failed. Please try again later.';
+            this.phase = 'error';
+          }
+        },
+        dlPct: 0,
+        dlRx: 0,
+        dlTot: 0,
+        dlPhase: 1,
+        dlKb(bytes) {
+          return Math.round(bytes / 1024) + ' KB';
         },
         // Step 2: confirm upgrade (fire-and-forget)
         confirmUpgrade() {
@@ -132,7 +158,7 @@
     <h2>Upgrade the firmware</h2>
 
     <!-- Error Banner -->
-    <div class="banner banner-error" x-show="phase === 'error'">
+    <div class="banner banner-error" x-show="phase === 'error'" x-cloak>
       <i class="fas fa-exclamation-circle banner-icon"></i>
       <span x-text="errorMessage"></span>
       <a href="/mngr_home.shtml" class="pure-button" style="margin-left: 0.5rem;">Back to Home</a>
@@ -150,13 +176,17 @@
       <button class="pure-button pure-button-primary" @click="continueUpgrade()">Continue upgrading</button>
     </div>
 
-    <!-- Step 1: Downloading spinner (2 minutes) -->
+    <!-- Step 1: live download progress -->
     <div x-show="phase === 'downloading'">
-      <p>Downloading firmware... This may take about two minutes. Please wait.</p>
-      <div id="spinner" class="spinner">
-        Downloading... <span class="spinner-char">|</span>
-        <span class="countdown">(<span x-text="downloadSecondsRemaining"></span> s)</span>
+      <p>Downloading firmware. Please keep this page open.</p>
+      <div class="progress-track" :class="dlTot === 0 ? 'progress-indeterminate' : ''">
+        <div class="progress-fill" :style="dlTot === 0 ? '' : 'width:' + dlPct + '%'"></div>
       </div>
+      <div class="progress-label">
+        <span x-text="dlTot === 0 ? '' : dlPct + '%'"></span>
+        <span class="progress-bytes" x-show="dlTot > 0" x-text="dlKb(dlRx) + ' of ' + dlKb(dlTot)"></span>
+      </div>
+      <p class="progress-hint" x-show="dlPhase >= 3">Verifying the downloaded image...</p>
     </div>
 
     <!-- Step 2: Ready to confirm upgrade -->

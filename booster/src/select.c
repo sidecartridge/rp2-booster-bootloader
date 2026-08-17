@@ -19,7 +19,18 @@ static bool __not_in_flash_func(select_is_stable_state)(bool pressed_state) {
   return true;
 }
 
+// True while core 1 is running the watcher. Read by the lockout helpers so
+// they no-op when core 1 has been stopped (app launch path).
+static volatile bool s_core1_watcher_active = false;
+
 static void __not_in_flash_func(select_wait_for_press_loop)(void) {
+  // Make this core lockout-able BEFORE anything else: core 0 must be able to
+  // park us in the SDK's RAM-resident lockout handler while it erases or
+  // programs flash. This loop is __not_in_flash_func, but that is not enough
+  // on its own -- sleep_ms and select_detectPush are flash-resident, so
+  // without the lockout this core fetches from flash while core 0 has XIP
+  // disabled, double-faults, and locks up.
+  multicore_lockout_victim_init();
   while (true) {
     DPRINTF("Waiting for SELECT button to be pushed\n");
     while (!select_detectPush()) {
@@ -90,11 +101,28 @@ void select_coreWaitPush(reset_callback_t reset, reset_callback_t resetLong) {
   reset_cb = reset;
   reset_long_cb = resetLong;
   multicore_launch_core1(select_wait_for_press_loop);
+  // The watcher runs victim-init as its first statement; the microseconds
+  // between this store and that init are safe because the first flash write
+  // happens much later in boot.
+  s_core1_watcher_active = true;
 }
 
 void select_coreWaitPushDisable() {
   DPRINTF("Disabling core 1\n");
+  s_core1_watcher_active = false;
   multicore_reset_core1();
+}
+
+void select_flashLockoutBegin(void) {
+  if (s_core1_watcher_active) {
+    multicore_lockout_start_blocking();
+  }
+}
+
+void select_flashLockoutEnd(void) {
+  if (s_core1_watcher_active) {
+    multicore_lockout_end_blocking();
+  }
 }
 
 void select_checkPushReset() {
