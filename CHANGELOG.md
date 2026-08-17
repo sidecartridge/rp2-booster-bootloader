@@ -1,13 +1,30 @@
 # Changelog
 
-## v2.3.1 (unreleased)
+## v2.4.0 (unreleased)
 
-Patch release. Firmware only.
+Firmware only. Installs and firmware updates are far more reliable, show real progress while they run, and the firmware update now checks the download before installing it.
+
+### New features
+- **You can see what an install is doing.** A progress bar with a percentage and size, the stage it has reached, and the name of the microfirmware being installed. It returns to the Apps page on its own when finished.
+- **Failed installs tell you why, and can be retried.** The page shows the reason and offers Retry or Cancel instead of a generic error page.
+- **Firmware updates are checked before installing.** The downloaded firmware is verified against a checksum published with it, and the update is refused if it does not match. It is also refused if the checksum is missing, so a damaged or incomplete download can never be flashed.
+- The firmware update page shows the same live progress, instead of a fixed two minute wait.
 
 ### Fixes
-- **Downloads now follow HTTP redirects.** A microfirmware or firmware URL that answers with 301, 302, 303, 307 or 308 is now followed to its target, up to 5 hops. Previously the redirect response was treated as the file itself, so the download either failed its integrity check or, for the firmware update, wrote a redirect page where firmware should have been. This affects both `http://` and `https://`.
-- Responses other than 2xx are now rejected before their body is read, so an error page can never be written to the SD card as a microfirmware.
-- URLs up to 1536 characters are accepted. Redirects to signed storage URLs, such as a GitHub release asset, carry long tokens in the query string and were previously cut short.
+- Microfirmwares hosted on GitHub releases and similar services now install correctly. Downloads follow redirects, and an error page can never be saved as a microfirmware.
+- Installs no longer fail at random. A download that used to fail once and work on a later attempt now works first time.
+- The device no longer freezes while installing.
+- Browsing the web interface during a download can no longer corrupt the SD card.
+- A dropped connection is retried instead of failing the whole install.
+- Several installs in a row no longer slow down or stall.
+- A failed firmware update used to report "No error". It now shows the real reason.
+- The progress page no longer shows the size of the previous download.
+- The banners at the top of a page no longer all flash into view while it loads.
+- Copyright notices read 2024-2026 and match on every page.
+
+### Build
+- Releases publish `upgrade.md5` alongside `upgrade.bin`.
+- The `fatfs-sdk` and `pico-extras` references now match the versions the build scripts use.
 
 ---
 
