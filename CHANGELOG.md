@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.4.0 (unreleased)
+## v2.4.0 (2026-08-17) - release
 
 Firmware only. Installs and firmware updates are far more reliable, show real progress while they run, and the firmware update now checks the download before installing it.
 
