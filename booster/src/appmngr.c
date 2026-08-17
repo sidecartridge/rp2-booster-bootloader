@@ -5,6 +5,8 @@
 #include <strings.h>
 
 #include "devapi.h"
+#include "lwip/stats.h"
+
 #include "select.h"
 #include "upgrader_firmware.h"
 
@@ -37,13 +39,60 @@ static char redirect_url[APPMNGR_MAX_URL_SIZE] = {0};
 // Re-issuing in the same tick as the abort collides with lwIP still tearing
 // the previous connection down. See appmngr_poll_download_app().
 static bool redirect_settling = false;
+
+// A hop that times out is retried before the whole download is failed. lwIP
+// reports every resource satisfied and TCP has already retransmitted the SYN
+// internally, so a transfer that receives nothing for 15 seconds means the
+// peer did not answer -- an ordinary internet event that any download client
+// is expected to ride out rather than surface as a hard failure.
+static bool retry_pending = false;
+static int hop_retries = 0;
+// Retry budget for the hop in flight. Lowered to 0 for optional fetches such as
+// upgrade.md5, where a 404 is a legitimate answer and retrying it just delays
+// the upgrade on every device whose release never published the file.
+static int max_hop_retries = APPMNGR_MAX_HOP_RETRIES;
+// The URL of the hop currently in flight, so a retry can re-issue it.
+static char current_url[APPMNGR_MAX_URL_SIZE] = {0};
+
+// Live progress for the web UI. Written from the lwIP callbacks, read from an
+// SSI handler (also lwIP context) and from the main loop, hence volatile.
+// download_bytes_total is 0 when the server sent no Content-Length, which the
+// UI renders as an indeterminate bar rather than a bogus percentage.
+static volatile uint32_t download_bytes_received = 0;
+static volatile uint32_t download_bytes_total = 0;
+// Coarse stage, for the progress page. DOWNLOAD_STATUS_* cannot express this:
+// it returns to IDLE on success (indistinguishable from "never started"), and
+// the verify/install work runs synchronously inside appmngr_finish_download_app
+// and appmngr_confirm_download_app where no status is published at all.
+static volatile appmngr_phase_t download_phase = APPMNGR_PHASE_IDLE;
+// Cleared around internal fetches the user should not see as a download, such
+// as the 32-byte upgrade.md5 companion file, which would otherwise flash up as
+// a completed 0 KB transfer before the real image starts.
+static volatile bool progress_reporting = true;
+
 static absolute_time_t redirect_retry_time;
+
+// FatFS is not reentrant (FF_FS_REENTRANT 0) yet is reached from two
+// contexts: httpd CGI/SSI handlers and the download's own f_write run inside
+// the cyw43 background worker, which preempts the main loop -- including in
+// the middle of a main-loop f_open or f_read. One preemption inside a FAT
+// update corrupts the shared sector window. The async-context lock is the
+// mutex the callbacks already run under, so main-loop filesystem sections
+// take it too; it is recursive, so a path reached from a callback (which
+// already holds it) is unaffected.
+static inline void appmngr_fs_lock(void) {
+  async_context_acquire_lock_blocking(cyw43_arch_async_context());
+}
+static inline void appmngr_fs_unlock(void) {
+  async_context_release_lock(cyw43_arch_async_context());
+}
 // The components of the request currently in flight, needed to resolve a
 // relative Location against the URL that produced it.
 static url_components_t active_components = {0};
 
 // Defined further down, next to get_tmp_filename_path().
 static void appmngr_cleanup_tmp_download_file(void);
+static download_err_t calculate_md5_of_tmp_file(MD5Context *md5_ctx);
 
 
 static DIR s_dir;
@@ -515,6 +564,7 @@ static err_t http_client_receive_file_fn(__unused void *arg,
   FRESULT fres = FR_OK;
   for (struct pbuf *q = p; q != NULL; q = q->next) {
     UINT bw = 0;
+    download_bytes_received += q->len;
     fres = f_write(&file, q->payload, q->len, &bw);
     if (fres != FR_OK || bw != q->len) {
       DPRINTF("Error writing to file: %i (wrote %u of %u)\n", fres,
@@ -711,11 +761,15 @@ static err_t http_client_header_check_size_fn(
           download_status = DOWNLOAD_STATUS_FAILED;
         return ERR_VAL;
       }
+      // Only a 2xx reaches here, so this is the real payload size.
+      download_bytes_total = (uint32_t)cl;
       break;
     }
     p = eol ? (eol + 2) : NULL;
   }
 
+  // A 2xx with headers parsed: the payload transfer starts now.
+  download_phase = APPMNGR_PHASE_DOWNLOAD;
   if (download_type == DOWNLOAD_TYPE_FIRMWARE)
     download_firmware_status = DOWNLOAD_STATUS_IN_PROGRESS;
   else
@@ -780,6 +834,24 @@ static void http_client_result_complete_fn(void *arg,
   // reached the MD5 check and failed there instead of at the download.
   if (httpc_result != HTTPC_RESULT_OK) {
     DPRINTF("Transfer did not complete: httpc_result %d\n", httpc_result);
+    if (hop_retries < max_hop_retries) {
+      // Hold the download open; appmngr_poll_download_app() re-issues it.
+      retry_pending = true;
+      if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
+        download_firmware_status = DOWNLOAD_STATUS_IN_PROGRESS;
+      } else {
+        download_status = DOWNLOAD_STATUS_IN_PROGRESS;
+      }
+      return;
+    }
+#if defined(_DEBUG) && (_DEBUG != 0) && LWIP_STATS && LWIP_STATS_DISPLAY
+    // lwIP's own accounting, rather than another guess. The interesting rows
+    // are the "err" and "avail" columns: MEMP_TCP_PCB exhaustion, PBUF_POOL
+    // starvation, MEM errors or TCP drops each point at a different cause for
+    // a connection that sends SYN and never receives anything.
+    DPRINTF("---- lwIP stats after a failed transfer ----\n");
+    stats_display();
+#endif
     if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
       download_firmware_status = DOWNLOAD_STATUS_FAILED;
       download_firmware_error = DOWNLOAD_HTTP_ERROR;
@@ -824,9 +896,11 @@ static void get_tmp_filename_path(char filename[256]) {
 static void appmngr_cleanup_tmp_download_file(void) {
   char filename[256] = {0};
   get_tmp_filename_path(filename);
+  appmngr_fs_lock();
   f_close(&file);
   f_chmod(filename, 0, AM_RDO);
   f_unlink(filename);
+  appmngr_fs_unlock();
 }
 
 static bool find_next_json_file(char *json, size_t max_len) {
@@ -1040,6 +1114,160 @@ uint16_t appmngr_get_installed_apps(appmngr_installed_app_t *apps,
   return count;
 }
 
+void appmngr_set_progress_reporting(bool enabled) {
+  progress_reporting = enabled;
+}
+
+void appmngr_get_download_progress(uint32_t *received, uint32_t *total) {
+  uint32_t rx = progress_reporting ? download_bytes_received : 0;
+  uint32_t tot = progress_reporting ? download_bytes_total : 0;
+  if (received != NULL) {
+    *received = rx;
+  }
+  if (total != NULL) {
+    *total = tot;
+  }
+}
+
+// Public wrapper: the web UI's Cancel action drops a partial download.
+void appmngr_cleanup_download(void) { appmngr_cleanup_tmp_download_file(); }
+
+// Expected MD5 of upgrade.bin, taken from the optional upgrade.md5 companion
+// file. Absent means "not published", which is not an error: the upgrade then
+// proceeds unverified, as it always did.
+static uint8_t expected_fw_md5[16] = {0};
+static bool have_expected_fw_md5 = false;
+
+// The download engine leaves the destination file open; nothing is flushed to
+// the card until it is closed. Anything that reads the file back (digest parse,
+// MD5) must close it first, and may be called before or after the regular
+// finish path, so this tolerates an already-closed handle.
+static FRESULT appmngr_close_download_file(void) {
+  appmngr_fs_lock();
+  FRESULT res = f_close(&file);
+  appmngr_fs_unlock();
+  if (res == FR_INVALID_OBJECT) {
+    // Already closed by an earlier step; not an error.
+    res = FR_OK;
+  }
+  return res;
+}
+
+void appmngr_set_max_hop_retries(int retries) {
+  max_hop_retries = retries < 0 ? 0 : retries;
+}
+
+void appmngr_clear_expected_firmware_md5(void) {
+  have_expected_fw_md5 = false;
+  memset(expected_fw_md5, 0, sizeof(expected_fw_md5));
+}
+
+bool appmngr_has_expected_firmware_md5(void) { return have_expected_fw_md5; }
+
+bool appmngr_load_expected_firmware_md5_from_tmp(void) {
+  appmngr_clear_expected_firmware_md5();
+
+  // Flush and release the handle the download engine left open, or the read
+  // below sees a short/empty file and the digest is silently ignored.
+  if (appmngr_close_download_file() != FR_OK) {
+    DPRINTF("upgrade.md5: could not close the download file\n");
+    return false;
+  }
+
+  char filename[256] = {0};
+  get_tmp_filename_path(filename);
+
+  // md5sum output is "<32 hex><spaces><name>", but a bare digest is just as
+  // common; only the first 32 characters matter either way.
+  char head[33] = {0};
+  UINT bytes_read = 0;
+  FIL md5_file;
+
+  appmngr_fs_lock();
+  FRESULT res = f_open(&md5_file, filename, FA_READ);
+  if (res == FR_OK) {
+    res = f_read(&md5_file, head, sizeof(head) - 1, &bytes_read);
+    f_close(&md5_file);
+  }
+  appmngr_fs_unlock();
+
+  if (res != FR_OK || bytes_read < 32) {
+    DPRINTF("upgrade.md5: unusable (fres %d, %u bytes read)\n", (int)res,
+            (unsigned)bytes_read);
+    return false;
+  }
+  head[32] = '\0';
+
+  if (!appmngr_parse_md5_hex(head, expected_fw_md5)) {
+    DPRINTF("upgrade.md5: not a valid hex digest\n");
+    return false;
+  }
+
+  have_expected_fw_md5 = true;
+  appmngr_debug_log_md5("Expected firmware MD5", expected_fw_md5,
+                        sizeof(expected_fw_md5));
+  return true;
+}
+
+download_err_t appmngr_verify_firmware_md5(void) {
+  if (!have_expected_fw_md5) {
+    // The checksum is required: refusing is the whole point of the check.
+    DPRINTF("No firmware checksum held; refusing to flash\n");
+    return DOWNLOAD_MD5UNAVAILABLE_ERROR;
+  }
+
+  // Same reason as above: hash the file on the card, not a half-written one.
+  if (appmngr_close_download_file() != FR_OK) {
+    DPRINTF("Could not close the firmware image before hashing\n");
+    return DOWNLOAD_CANNOTCLOSEFILE_ERROR;
+  }
+
+  MD5Context md5_ctx;
+  download_err_t err = calculate_md5_of_tmp_file(&md5_ctx);
+  if (err != DOWNLOAD_OK) {
+    DPRINTF("Error calculating MD5 of the firmware image: %d\n", err);
+    return err;
+  }
+
+  appmngr_debug_log_md5("Expected firmware MD5", expected_fw_md5,
+                        sizeof(expected_fw_md5));
+  appmngr_debug_log_md5("Downloaded firmware MD5", md5_ctx.digest,
+                        sizeof(expected_fw_md5));
+
+  // Integrity, not authenticity: the digest travels from the same host over
+  // the same unauthenticated TLS connection as the image (decision D-01), so
+  // it catches truncation and corruption, not substitution.
+  if (memcmp(expected_fw_md5, md5_ctx.digest, sizeof(expected_fw_md5)) != 0) {
+    DPRINTF("Firmware MD5 mismatch: refusing to flash\n");
+    return DOWNLOAD_MD5MISMATCH_ERROR;
+  }
+  DPRINTF("Firmware MD5 match\n");
+  return DOWNLOAD_OK;
+}
+
+appmngr_phase_t appmngr_get_download_phase() {
+  // An internal fetch still reads as "connecting" to the user: the transfer
+  // they asked for has not started yet.
+  if (!progress_reporting && download_phase == APPMNGR_PHASE_DOWNLOAD) {
+    return APPMNGR_PHASE_CONNECT;
+  }
+  return download_phase;
+}
+
+void appmngr_set_download_phase(appmngr_phase_t phase) {
+  // CONNECT marks the start of a new transfer, and is set by every entry point
+  // (a fresh install, a retry, the firmware flow, and the upgrade.md5 to
+  // upgrade.bin handover). Zero the counters here rather than in
+  // appmngr_start_download(), which only runs after a 3 second arming delay:
+  // the progress page is already polling during that gap and would otherwise
+  // report the previous download's size.
+  if (phase == APPMNGR_PHASE_CONNECT) {
+    download_bytes_received = 0;
+    download_bytes_total = 0;
+  }
+  download_phase = phase;
+}
+
 download_status_t appmngr_get_download_status() { return download_status; }
 
 void appmngr_download_status(download_status_t status) {
@@ -1067,7 +1295,11 @@ void appmngr_download_firmware_error(download_err_t err) {
 }
 
 const char *appmngr_get_download_error_str() {
-  switch (download_error) {
+  return appmngr_download_error_to_str(download_error);
+}
+
+const char *appmngr_download_error_to_str(download_err_t err) {
+  switch (err) {
     case DOWNLOAD_OK:
       return "No error";
     case DOWNLOAD_BASE64_ERROR:
@@ -1091,7 +1323,7 @@ const char *appmngr_get_download_error_str() {
     case DOWNLOAD_CANNOTPARSEURL_ERROR:
       return "Cannot parse URL";
     case DOWNLOAD_MD5MISMATCH_ERROR:
-      return "MD5 mismatch";
+      return "Checksum mismatch: the download is corrupt or incomplete";
     case DOWNLOAD_CANNOTRENAMEFILE_ERROR:
       return "Cannot rename file";
     case DOWNLOAD_CANNOTCREATE_CONFIG:
@@ -1100,6 +1332,8 @@ const char *appmngr_get_download_error_str() {
       return "Cannot delete configuration sector";
     case DOWNLOAD_HTTP_ERROR:
       return "HTTP error";
+    case DOWNLOAD_MD5UNAVAILABLE_ERROR:
+      return "Firmware checksum (upgrade.md5) missing or unreadable";
     default:
       return "Unknown error";
   }
@@ -1121,9 +1355,11 @@ static int8_t appmngr_delete_config_sector(uint8_t sector) {
       (flash_start - XIP_BASE) + (uint32_t)sector * FLASH_SECTOR_SIZE;
   DPRINTF("Erase config sector %u at offset 0x%08X\n", sector, offs);
 
+  select_flashLockoutBegin();
   uint32_t ints = save_and_disable_interrupts();
   flash_range_erase(offs, FLASH_SECTOR_SIZE);
   restore_interrupts(ints);
+  select_flashLockoutEnd();
   return 0;
 }
 
@@ -1500,6 +1736,7 @@ static int8_t appmngr_persist_app_lookup_table(const uint8_t *table,
                                  (uint32_t)&_global_lookup_flash_start;
 
   // Erase the whole region that stores the table (or at least the first sector)
+  select_flashLockoutBegin();
   uint32_t ints = save_and_disable_interrupts();
   flash_range_erase(flash_start - XIP_BASE, FLASH_SECTOR_SIZE);
 
@@ -1517,6 +1754,7 @@ static int8_t appmngr_persist_app_lookup_table(const uint8_t *table,
     wrote += chunk;
   }
   restore_interrupts(ints);
+  select_flashLockoutEnd();
   return 0;
 }
 
@@ -1847,9 +2085,11 @@ int8_t appmngr_erase_app_lookup_table() {
           flash_start, flash_length, num_sectors);
 
   // Erase the sector
+  select_flashLockoutBegin();
   uint32_t ints = save_and_disable_interrupts();
   flash_range_erase(flash_start - XIP_BASE, flash_length);  // 4 Kbytes
   restore_interrupts(ints);
+  select_flashLockoutEnd();
 
   return 0;  // Success
 }
@@ -2018,6 +2258,7 @@ download_err_t appmngr_start_download(const char *url) {
   DPRINTF("Downloading app binary to file: %s\n", filename);
   FRESULT res;
 
+  appmngr_fs_lock();
   // Close any previously open handle
   f_close(&file);
 
@@ -2046,8 +2287,10 @@ download_err_t appmngr_start_download(const char *url) {
 
   if (res != FR_OK) {
     DPRINTF("Error opening file %s: %i\n", filename, res);
+    appmngr_fs_unlock();
     return DOWNLOAD_CANNOTOPENFILE_ERROR;
   }
+  appmngr_fs_unlock();
 
   UINT bw = 0;
   const uint8_t probe_byte = 0;
@@ -2069,8 +2312,16 @@ download_err_t appmngr_start_download(const char *url) {
   }
 
   // A fresh download starts the hop count over; a redirect re-issue must not.
+  // The pending/settling flags must be cleared too: if a previous attempt died
+  // between capturing a Location and consuming it, they stay set, and the first
+  // poll of THIS download would chase the previous attempt's stale redirect_url
+  // instead of the transfer we just started.
   if (!following_redirect) {
     redirect_hops = 0;
+    redirect_pending = false;
+    redirect_settling = false;
+    retry_pending = false;
+    hop_retries = 0;
   }
 
   // Get the components of a url
@@ -2084,6 +2335,7 @@ download_err_t appmngr_start_download(const char *url) {
       DPRINTF("Error parsing redirect URL: %s\n", redirect_url);
       return DOWNLOAD_CANNOTPARSEURL_ERROR;
     }
+    snprintf(current_url, sizeof(current_url), "%s", redirect_url);
     if (download_type == DOWNLOAD_TYPE_FIRMWARE) {
       download_firmware_status = DOWNLOAD_STATUS_STARTED;
       download_firmware_error = DOWNLOAD_OK;
@@ -2096,6 +2348,7 @@ download_err_t appmngr_start_download(const char *url) {
       DPRINTF("Error parsing URL of app_info.binary: %s\n", app_info.binary);
       return DOWNLOAD_CANNOTPARSEURL_ERROR;
     }
+    snprintf(current_url, sizeof(current_url), "%s", app_info.binary);
     download_type = DOWNLOAD_TYPE_APP;
     download_status = DOWNLOAD_STATUS_STARTED;
     download_error = DOWNLOAD_OK;
@@ -2104,10 +2357,17 @@ download_err_t appmngr_start_download(const char *url) {
       DPRINTF("Error parsing URL of url arg: %s\n", url);
       return DOWNLOAD_CANNOTPARSEURL_ERROR;
     }
+    snprintf(current_url, sizeof(current_url), "%s", url);
     download_type = DOWNLOAD_TYPE_FIRMWARE;
     download_firmware_status = DOWNLOAD_STATUS_STARTED;
     download_firmware_error = DOWNLOAD_OK;
   }
+  // Every hop restarts the destination file, so the counters restart with it.
+  // This must NOT be limited to a fresh download: a redirect re-issue and a
+  // retry both truncate and rewrite the same file.
+  download_bytes_received = 0;
+  download_bytes_total = 0;
+
   // Remember what we are about to request: a relative Location is resolved
   // against it (components itself is on the stack).
   active_components = components;
@@ -2124,29 +2384,46 @@ download_err_t appmngr_start_download(const char *url) {
     return DOWNLOAD_CANNOTPARSEURL_ERROR;
   }
 
+  // Rebuilding `request` holds the async-context lock because lwIP keeps
+  // pointers INTO this struct for the lifetime of a connection
+  // (http_client.c stores conn_settings = &request.settings and
+  // callback_arg = &request), and under the threadsafe_background cyw43 arch
+  // lwIP runs callbacks and teardown in a background context concurrent with
+  // this main-loop code. A redirect re-issues while the previous connection
+  // may still be tearing down, so repopulating the struct unlocked is a real
+  // race. Note this was NOT the cause of the download failures -- that was
+  // lwIP send-heap exhaustion (see MEM_SIZE in lwipopts.h) -- and adding this
+  // lock alone changed nothing. It is kept because the race is real, not
+  // because it fixed anything.
+  //
+  // The lock is recursive, so http_client_request_async() taking it again
+  // inside is fine.
+  async_context_t *ctx = cyw43_arch_async_context();
+  async_context_acquire_lock_blocking(ctx);
   request = (HTTPC_REQUEST_T){0};
   request.complete = false;
   request.hostname = request_host_buf;
   request.url = request_uri_buf;
   request.port = components.port;  // 0 lets httpc pick 80 or 443
-  DPRINTF("HOST: %s. PORT: %u. URI: %s\n", components.host, components.port,
-          components.uri);
   request.headers_fn = http_client_header_check_size_fn;
   request.recv_fn = http_client_receive_file_fn;
   request.result_fn = http_client_result_complete_fn;
-  DPRINTF("Downloading app binary: %s\n", request.url);
   if (use_https) {
     request.tls_config = httpc_shared_tls_config();
     if (request.tls_config == NULL) {
+      async_context_release_lock(ctx);
       DPRINTF("Cannot initialize HTTPS\n");
       return DOWNLOAD_CANNOTSTARTDOWNLOAD_ERROR;
     }
-    DPRINTF("Download with HTTPS\n");
   } else {
     request.tls_config = NULL;
-    DPRINTF("Download with HTTP\n");
   }
-  int result = http_client_request_async(cyw43_arch_async_context(), &request);
+  DPRINTF("HOST: %s. PORT: %u. URI: %s\n", components.host, components.port,
+          components.uri);
+  DPRINTF("Downloading app binary: %s\n", request.url);
+  DPRINTF("Download with %s\n", use_https ? "HTTPS" : "HTTP");
+  int result = http_client_request_async(ctx, &request);
+  async_context_release_lock(ctx);
   if (result != 0) {
     DPRINTF("Error initializing the download app binary: %i\n", result);
     res = f_close(&file);
@@ -2163,6 +2440,42 @@ download_poll_t appmngr_poll_download_app() {
   if (!request.complete) {
     async_context_poll(cyw43_arch_async_context());
     async_context_wait_for_work_ms(cyw43_arch_async_context(), 10);
+    return DOWNLOAD_POLL_CONTINUE;
+  }
+  if (retry_pending) {
+    // Same deferral as the redirect path below: re-issuing from inside an
+    // lwIP callback would reenter the stack.
+    if (!redirect_settling) {
+      redirect_settling = true;
+      redirect_retry_time = make_timeout_time_ms(APPMNGR_REDIRECT_SETTLE_MS);
+      return DOWNLOAD_POLL_CONTINUE;
+    }
+    if (absolute_time_diff_us(get_absolute_time(), redirect_retry_time) > 0) {
+      async_context_poll(cyw43_arch_async_context());
+      async_context_wait_for_work_ms(cyw43_arch_async_context(), 10);
+      return DOWNLOAD_POLL_CONTINUE;
+    }
+    redirect_settling = false;
+    retry_pending = false;
+    hop_retries++;
+    DPRINTF("Retrying hop, attempt %d/%d\n", hop_retries,
+            max_hop_retries);
+    // The redirect path re-issues from redirect_url, and following_redirect
+    // keeps the hop count and download_type intact, which is what a retry of
+    // the current hop needs too.
+    snprintf(redirect_url, sizeof(redirect_url), "%s", current_url);
+    following_redirect = true;
+    download_err_t retry_err = appmngr_start_download(NULL);
+    following_redirect = false;
+    if (retry_err != DOWNLOAD_OK) {
+      DPRINTF("Hop retry failed to start: %d\n", retry_err);
+      appmngr_cleanup_tmp_download_file();
+      if (download_type == DOWNLOAD_TYPE_FIRMWARE)
+        download_firmware_status = DOWNLOAD_STATUS_FAILED;
+      else
+        download_status = DOWNLOAD_STATUS_FAILED;
+      return DOWNLOAD_POLL_COMPLETED;
+    }
     return DOWNLOAD_POLL_CONTINUE;
   }
   if (redirect_pending) {
@@ -2188,6 +2501,7 @@ download_poll_t appmngr_poll_download_app() {
     redirect_settling = false;
     redirect_pending = false;
     redirect_hops++;
+    hop_retries = 0;
     DPRINTF("Following redirect %d/%d\n", redirect_hops,
             APPMNGR_MAX_REDIRECT_HOPS);
     following_redirect = true;
@@ -2212,9 +2526,13 @@ static download_err_t calculate_md5_of_tmp_file(MD5Context *md5_ctx) {
   char filename[256] = {0};
   get_tmp_filename_path(filename);
 
+  // Held for the whole read: ~400KB from SD takes well under a second, and
+  // nothing latency-critical runs while a finished download is hashed.
+  appmngr_fs_lock();
   res = f_open(&md5_file, filename, FA_READ);
   if (res != FR_OK) {
     DPRINTF("Error opening tmp file for MD5 calculation: %i\n", res);
+    appmngr_fs_unlock();
     return DOWNLOAD_CANNOTOPENFILE_ERROR;
   }
 
@@ -2223,6 +2541,7 @@ static download_err_t calculate_md5_of_tmp_file(MD5Context *md5_ctx) {
   if (buffer == NULL) {
     DPRINTF("Error allocating buffer for MD5 calculation\n");
     f_close(&md5_file);
+    appmngr_fs_unlock();
     return DOWNLOAD_CANNOTCREATE_CONFIG;
   }
   memset(buffer, 0, 4096);
@@ -2234,6 +2553,7 @@ static download_err_t calculate_md5_of_tmp_file(MD5Context *md5_ctx) {
       DPRINTF("Error reading file %s for MD5 calculation: %i\n", filename, res);
       f_close(&md5_file);
       free(buffer);
+      appmngr_fs_unlock();
       return DOWNLOAD_CANNOTREADFILE_ERROR;
     }
     md5Update(md5_ctx, buffer, bytes_read);
@@ -2241,6 +2561,7 @@ static download_err_t calculate_md5_of_tmp_file(MD5Context *md5_ctx) {
 
   md5Finalize(md5_ctx);
   f_close(&md5_file);
+  appmngr_fs_unlock();
   free(buffer);
   DPRINTF("MD5 hash calculated\n");
   return DOWNLOAD_OK;
@@ -2248,7 +2569,9 @@ static download_err_t calculate_md5_of_tmp_file(MD5Context *md5_ctx) {
 
 download_err_t appmngr_finish_download_app() {
   // Close the file
+  appmngr_fs_lock();
   int res = f_close(&file);
+  appmngr_fs_unlock();
   if (res != FR_OK) {
     DPRINTF("Error closing tmp file %s: %i\n", res);
     return DOWNLOAD_CANNOTCLOSEFILE_ERROR;
@@ -2301,6 +2624,8 @@ download_err_t appmngr_finish_download_app() {
     return DOWNLOAD_MD5MISMATCH_ERROR;
   } else {
     DPRINTF("MD5 hash match\n");
+    // Hash confirmed; everything after this is SD and flash work.
+    download_phase = APPMNGR_PHASE_INSTALL;
   }
 
   // We have to add this new downloaded file to the app lookup table
@@ -2366,6 +2691,7 @@ download_err_t appmngr_confirm_download_app() {
            uuid);
 
   DPRINTF("Writing files %s and %s\n", json_filename, binary_filename);
+  appmngr_fs_lock();
   // Try to delete the files if they exist
   f_unlink(json_filename);
   f_unlink(binary_filename);
@@ -2381,14 +2707,17 @@ download_err_t appmngr_confirm_download_app() {
   FRESULT res = f_rename(tmp_json_filename, json_filename);
   if (res != FR_OK) {
     DPRINTF("Error renaming json file: %i\n", res);
+    appmngr_fs_unlock();
     return DOWNLOAD_CANNOTRENAMEFILE_ERROR;
   }
   // Rename the binary file to the final filename
   res = f_rename(tmp_binary_filename, binary_filename);
   if (res != FR_OK) {
     DPRINTF("Error renaming binary file: %i\n", res);
+    appmngr_fs_unlock();
     return DOWNLOAD_CANNOTRENAMEFILE_ERROR;
   }
+  appmngr_fs_unlock();
   DPRINTF("Written files %s and %s\n", json_filename, binary_filename);
   return DOWNLOAD_OK;
 }
@@ -2398,8 +2727,8 @@ download_err_t appmngr_confirm_failed_download_app() {
 }
 
 download_err_t appmngr_finish_download_firmware() {
-  // Close the file
-  int res = f_close(&file);
+  // May already be closed by the MD5 verification step; that is fine.
+  int res = appmngr_close_download_file();
   if (res != FR_OK) {
     DPRINTF("Error closing tmp file %s: %i\n", res);
     return DOWNLOAD_CANNOTCLOSEFILE_ERROR;

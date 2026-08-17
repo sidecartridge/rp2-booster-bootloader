@@ -9,6 +9,9 @@
 #include "mngr.h"
 
 static firmware_upgrade_state_t firmware_upgrade_state = FIRMWARE_UPGRADE_IDLE;
+// True while the optional upgrade.md5 companion file is being fetched, false
+// once the real image download is in flight. See mngr_firmwareUpgradeStart().
+static bool fw_fetching_md5 = false;
 static bool network_scan_enabled = false;
 static bool device_reset = false;
 static bool factory_reset = false;
@@ -314,6 +317,7 @@ int mngr_init() {
         case DOWNLOAD_STATUS_REQUESTED: {
           start_download_time = make_timeout_time_ms(
               3 * 1000);  // 3 seconds to start the download
+          appmngr_set_download_phase(APPMNGR_PHASE_CONNECT);
           appmngr_download_status(DOWNLOAD_STATUS_NOT_STARTED);
           break;
         }
@@ -331,22 +335,29 @@ int mngr_init() {
         case DOWNLOAD_STATUS_STARTED: {
           if (appmngr_get_download_error() != DOWNLOAD_OK) {
             DPRINTF("Error downloading app. Drive to error page.\n");
+            appmngr_set_download_phase(APPMNGR_PHASE_FAILED);
             appmngr_confirm_failed_download_app();
             appmngr_download_status(DOWNLOAD_STATUS_FAILED);
           }
           break;
         }
         case DOWNLOAD_STATUS_COMPLETED: {
+          // The transfer is done; what follows is the MD5 read and the flash
+          // work. appmngr_finish_download_app() advances the phase to INSTALL
+          // itself once the hash matches.
+          appmngr_set_download_phase(APPMNGR_PHASE_VERIFY);
           // Save the app info to the SD card
           download_err_t err = appmngr_finish_download_app();
           appmngr_download_error(err);
           if (err != DOWNLOAD_OK) {
             DPRINTF("Error finishing download app\n");
+            appmngr_set_download_phase(APPMNGR_PHASE_FAILED);
             appmngr_confirm_failed_download_app();
             appmngr_download_status(DOWNLOAD_STATUS_FAILED);
             break;
           }
           appmngr_confirm_download_app();
+          appmngr_set_download_phase(APPMNGR_PHASE_DONE);
           appmngr_download_status(DOWNLOAD_STATUS_IDLE);
           break;
         }
@@ -358,23 +369,40 @@ int mngr_init() {
         case DOWNLOAD_STATUS_REQUESTED: {
           start_download_time = make_timeout_time_ms(
               3 * 1000);  // 3 seconds to start the download
+          appmngr_set_download_phase(APPMNGR_PHASE_CONNECT);
           appmngr_download_firmware_status(DOWNLOAD_STATUS_NOT_STARTED);
           break;
         }
         case DOWNLOAD_STATUS_NOT_STARTED: {
           if ((absolute_time_diff_us(get_absolute_time(), start_download_time) <
                0)) {
-            // Start the download. NULL means use info in app_info
-            err = appmngr_start_download(FIRMWARE_BINARY_URL);
+            err = appmngr_start_download(
+                fw_fetching_md5 ? FIRMWARE_MD5_URL : FIRMWARE_BINARY_URL);
             if (err != DOWNLOAD_OK) {
               DPRINTF("Error downloading firmware. Drive to error page.\n");
             }
           }
           break;
         }
+        case DOWNLOAD_STATUS_FAILED: {
+          if (fw_fetching_md5) {
+            // The checksum is required. Without it there is no way to tell a
+            // good image from a truncated or corrupted one, so refuse rather
+            // than flash something unverified.
+            DPRINTF("upgrade.md5 unavailable; refusing the upgrade\n");
+            fw_fetching_md5 = false;
+            appmngr_clear_expected_firmware_md5();
+            appmngr_set_progress_reporting(true);
+            appmngr_download_firmware_error(DOWNLOAD_MD5UNAVAILABLE_ERROR);
+            appmngr_set_download_phase(APPMNGR_PHASE_FAILED);
+            firmware_upgrade_state = FIRMWARE_UPGRADE_FAILED;
+          }
+          break;
+        }
         case DOWNLOAD_STATUS_STARTED: {
           if (appmngr_get_download_firmware_error() != DOWNLOAD_OK) {
             DPRINTF("Error downloading firmware. Drive to error page.\n");
+            appmngr_set_download_phase(APPMNGR_PHASE_FAILED);
             appmngr_confirm_failed_download_firmware();
             appmngr_download_firmware_status(DOWNLOAD_STATUS_FAILED);
           } else {
@@ -385,8 +413,44 @@ int mngr_init() {
           break;
         }
         case DOWNLOAD_STATUS_COMPLETED: {
+          if (fw_fetching_md5) {
+            // Stage 1 done. A file that arrives but cannot be parsed is as
+            // fatal as one that never arrived.
+            bool got_digest = appmngr_load_expected_firmware_md5_from_tmp();
+            fw_fetching_md5 = false;
+            appmngr_set_progress_reporting(true);
+            if (!got_digest) {
+              DPRINTF("upgrade.md5 malformed; refusing the upgrade\n");
+              appmngr_download_firmware_error(DOWNLOAD_MD5UNAVAILABLE_ERROR);
+              appmngr_set_download_phase(APPMNGR_PHASE_FAILED);
+              appmngr_download_firmware_status(DOWNLOAD_STATUS_FAILED);
+              firmware_upgrade_state = FIRMWARE_UPGRADE_FAILED;
+              break;
+            }
+            appmngr_download_firmware_error(DOWNLOAD_OK);
+            appmngr_set_download_phase(APPMNGR_PHASE_CONNECT);
+            appmngr_download_firmware_status(DOWNLOAD_STATUS_REQUESTED);
+            break;
+          }
+
+          // Stage 2 done: verify before the image goes anywhere near flash.
+          // With no published digest this returns OK and changes nothing.
+          firmware_upgrade_state = FIRMWARE_UPGRADE_VERIFYING;
+          appmngr_set_download_phase(APPMNGR_PHASE_VERIFY);
+          download_err_t md5_err = appmngr_verify_firmware_md5();
+          if (md5_err != DOWNLOAD_OK) {
+            DPRINTF("Firmware image failed verification; aborting\n");
+            appmngr_download_firmware_error(md5_err);
+            appmngr_set_download_phase(APPMNGR_PHASE_FAILED);
+            appmngr_confirm_failed_download_firmware();
+            appmngr_download_firmware_status(DOWNLOAD_STATUS_FAILED);
+            firmware_upgrade_state = FIRMWARE_UPGRADE_FAILED;
+            break;
+          }
+
           // Save the app info to the SD card
           appmngr_download_firmware_error(DOWNLOAD_OK);
+          appmngr_set_download_phase(APPMNGR_PHASE_DONE);
           appmngr_download_firmware_status(DOWNLOAD_STATUS_IDLE);
           firmware_upgrade_state = FIRMWARE_UPGRADE_DOWNLOADED;
           display_mngr_change_status(6, NULL);  // Upgrading firmware message
@@ -479,8 +543,16 @@ void mngr_loop() {}
  * Also clears any previous firmware download error.
  */
 void mngr_firmwareUpgradeStart(void) {
-  DPRINTF("mngr_firmwareUpgradeStart: scheduling firmware download\n");
+  DPRINTF("mngr_firmwareUpgradeStart: fetching upgrade.md5 first\n");
   firmware_upgrade_state = FIRMWARE_UPGRADE_DOWNLOADING;
+  // The digest is fetched BEFORE the image because both downloads land in the
+  // same temp file; the other order would overwrite the image we just fetched.
+  // It is optional, so a 404 must not cost three retry attempts.
+  fw_fetching_md5 = true;
+  appmngr_clear_expected_firmware_md5();
+  // Normal retry budget: the checksum is mandatory, so a dropped connection
+  // must not be mistaken for "not published" and fail the upgrade.
+  appmngr_set_progress_reporting(false);
   appmngr_download_firmware_error(DOWNLOAD_OK);
   appmngr_download_firmware_status(DOWNLOAD_STATUS_REQUESTED);
 }
@@ -494,6 +566,9 @@ void mngr_firmwareUpgradeStart(void) {
 void mngr_firmwareUpgradeClean(void) {
   DPRINTF("mngr_firmwareUpgradeClean: resetting firmware upgrade state\n");
   firmware_upgrade_state = FIRMWARE_UPGRADE_IDLE;
+  fw_fetching_md5 = false;
+  appmngr_clear_expected_firmware_md5();
+  appmngr_set_progress_reporting(true);
   appmngr_download_firmware_error(DOWNLOAD_OK);
   appmngr_download_firmware_status(DOWNLOAD_STATUS_IDLE);
 }

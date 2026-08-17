@@ -75,6 +75,7 @@ jobs:
         files_to_upload = [
           ('SIDECARTVERSION', 'text/plain'),
           ('upgrade.bin', 'application/octet-stream'),
+          ('upgrade.md5', 'text/plain'),
         ]
 
         for fname, content_type in files_to_upload:

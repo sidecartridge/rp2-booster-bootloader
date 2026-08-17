@@ -196,8 +196,8 @@ static const char *ssi_tags[] = {
     "NVERSION",  // 18 - New Version
     "NVERSTR",   // 19 - New Version String
     "DEVMODE",   // 20 - Developer deploy API enabled (EPIC-05)
-    "PLHLDR12",  // 21 - Placeholder 12
-    "PLHLDR13",  // 22 - Placeholder 13
+    "DLSTAT",    // 21 - Download progress JSON (was PLHLDR12)
+    "DLNAME",    // 22 - Name of the app being installed (was PLHLDR13)
     "PLHLDR14",  // 23 - Placeholder 14
     "PLHLDR15",  // 24 - Placeholder 15
     "PLHLDR16",  // 25 - Placeholder 16
@@ -607,9 +607,42 @@ const char *cgi_firmware_upgrade_confirm(int iIndex, int iNumParams,
  * handler functions for selecting and ejecting floppy disk images for drive A
  * and drive B.
  */
+// Re-issue the install that just failed. Nothing needs re-posting: the failure
+// path leaves app_info and /apps/tmp.json intact, so the download engine can be
+// pointed at the same target again.
+const char *cgi_download_retry(int iIndex, int iNumParams, char *pcParam[],
+                               char *pcValue[]) {
+  LWIP_UNUSED_ARG(iIndex);
+  LWIP_UNUSED_ARG(iNumParams);
+  LWIP_UNUSED_ARG(pcParam);
+  LWIP_UNUSED_ARG(pcValue);
+  DPRINTF("cgi_download_retry called\n");
+  appmngr_set_download_phase(APPMNGR_PHASE_CONNECT);
+  appmngr_download_error(DOWNLOAD_OK);
+  appmngr_set_download_phase(APPMNGR_PHASE_CONNECT);
+  appmngr_download_status(DOWNLOAD_STATUS_REQUESTED);
+  return "/downloading.shtml";
+}
+
+// Abandon a failed install and drop the partial file.
+const char *cgi_download_cancel(int iIndex, int iNumParams, char *pcParam[],
+                                char *pcValue[]) {
+  LWIP_UNUSED_ARG(iIndex);
+  LWIP_UNUSED_ARG(iNumParams);
+  LWIP_UNUSED_ARG(pcParam);
+  LWIP_UNUSED_ARG(pcValue);
+  DPRINTF("cgi_download_cancel called\n");
+  appmngr_cleanup_download();
+  appmngr_set_download_phase(APPMNGR_PHASE_IDLE);
+  appmngr_download_status(DOWNLOAD_STATUS_IDLE);
+  return "/mngr_home.shtml";
+}
+
 static const tCGI cgi_handlers[] = {
     {"/test.cgi", cgi_test},
     {"/download.cgi", cgi_download},
+    {"/download_retry.cgi", cgi_download_retry},
+    {"/download_cancel.cgi", cgi_download_cancel},
     {"/saveparams.cgi", cgi_saveparams},
     {"/reboot.cgi", cgi_reboot},
     {"/factoryreset.cgi", cgi_factoryreset},
@@ -1045,9 +1078,67 @@ static u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen
       }
       break;
     }
+    case 21: /* DLSTAT - download progress, polled by downloading.shtml */
+    {
+      uint32_t received = 0;
+      uint32_t total = 0;
+      appmngr_get_download_progress(&received, &total);
+      appmngr_phase_t phase = appmngr_get_download_phase();
+
+      // Percent only means anything with a Content-Length; 0 total tells the
+      // page to show an indeterminate bar instead of a fake number.
+      int pct = 0;
+      if (total > 0) {
+        pct = (int)((uint64_t)received * 100U / total);
+        if (pct > 100) {
+          pct = 100;
+        }
+      } else if (phase > APPMNGR_PHASE_DOWNLOAD) {
+        pct = 100;
+      }
+
+      bool is_firmware =
+          (appmngr_get_download_firmware_status() != DOWNLOAD_STATUS_IDLE);
+      download_err_t err = is_firmware ? appmngr_get_download_firmware_error()
+                                       : appmngr_get_download_error();
+      // Use the code for the flow that actually failed. The app and firmware
+      // downloads keep separate error variables, and reading the wrong one
+      // reported a failed firmware upgrade as "No error".
+      const char *msg = "";
+      if (phase == APPMNGR_PHASE_FAILED) {
+        msg = (err == DOWNLOAD_OK) ? "The download did not complete"
+                                   : appmngr_download_error_to_str(err);
+      }
+
+      printed = snprintf(pcInsert, iInsertLen,
+                         // %.100s, not %.48s: the scaffolding above is 76
+                         // bytes and the insert limit is 192, so 100 fits with
+                         // margin. 48 cut "Checksum mismatch: the download is
+                         // corrupt or incomplete" mid-word. Error strings are
+                         // fixed literals with no quotes or backslashes, so
+                         // they need no JSON escaping; keep it that way.
+                         "{\"ph\":%d,\"pct\":%d,\"rx\":%lu,\"tot\":%lu,"
+                         "\"fw\":%d,\"err\":%d,\"msg\":\"%.100s\"}",
+                         (int)phase, pct, (unsigned long)received,
+                         (unsigned long)total, is_firmware ? 1 : 0, (int)err,
+                         msg);
+      break;
+    }
+    case 22: /* DLNAME - which app is installing */
+    {
+      printed = snprintf(pcInsert, iInsertLen, "%.64s",
+                         appmngr_get_app_info()->name);
+      break;
+    }
     default: /* unknown tag */
       printed = 0;
       break;
+  }
+  // snprintf returns what it WOULD have written. Returning a value larger than
+  // the buffer makes lwIP write that many bytes out of tag_insert[], reading
+  // past the end. Clamp before returning.
+  if (printed > (iInsertLen - 1)) {
+    printed = iInsertLen - 1;
   }
   LWIP_ASSERT("sane length", printed <= 0xFFFF);
   return (u16_t)printed;

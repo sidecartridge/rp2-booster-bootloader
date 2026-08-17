@@ -669,7 +669,7 @@
   <!-- Main Content Area -->
   <main class="main-content">
     <!-- Informational banner if a new version is available -->
-    <div class="banner banner-info" x-data="{ show: true }" x-show="'<!--#NVERSION-->' === 'Yes' && show">
+    <div class="banner banner-info" x-data="{ show: true }" x-show="'<!--#NVERSION-->' === 'Yes' && show" x-cloak>
       <i class="fas fa-info-circle banner-icon"></i>
       <span>
         Firmware update available (<a target="_blank"
@@ -785,7 +785,7 @@
     </section>
 
     <!-- No SD card found. -->
-    <div x-show="<!--#SDCARDB--> === false" class="banner banner-error">
+    <div x-show="<!--#SDCARDB--> === false" class="banner banner-error" x-cloak>
       <i class="fas fa-exclamation-circle banner-icon"></i><!-- Error Icon -->
       <span>We couldn't detect a functional microSD card in the SD card slot. Please ensure you're using a microSD card
         formatted in exFAT or FAT32 and compatible with SDHC, SDXC, or SDUC standards. Once your card is ready, insert
@@ -796,7 +796,7 @@
     </div>
 
     <!-- No apps found banner. Show only if there is no folder but the SD card is ready -->
-    <div class="banner banner-warning" x-show="(<!--#SDCARDB--> === true) && (<!--#APPSFLDB--> === false)">
+    <div class="banner banner-warning" x-show="(<!--#SDCARDB--> === true) && (<!--#APPSFLDB--> === false)" x-cloak>
       <i class="fas fa-exclamation-triangle banner-icon"></i> <!-- Warning Icon -->
       <span>The folder for storing micro-firmwares is missing. This usually indicates that the device cannot write to
         the microSD card. Please ensure the card is in read/write mode and try again.</span>
@@ -806,7 +806,7 @@
     </div>
 
     <!-- Warning banner for fetch error -->
-    <div class="banner banner-warning" x-show="fetchError">
+    <div class="banner banner-warning" x-show="fetchError" x-cloak>
       <i class="fas fa-exclamation-triangle banner-icon"></i>
       <span>Warning: The remote apps URL is not reachable. You can modify it in the config menu.</span>
       <button class="banner-close" @click="fetchError = false" aria-label="Close">
@@ -818,8 +818,7 @@
   <div
     class="banner banner-info"
     x-data="{ show: true }"
-    x-show="show"
-  >
+    x-show="show" x-cloak>
     <i class="fas fa-info-circle banner-icon"></i>
     <span>Here’s some important information you should know.</span>
     <button class="banner-close" @click="show = false" aria-label="Close">
@@ -830,8 +829,7 @@
   <div
     class="banner banner-success"
     x-data="{ show: true }"
-    x-show="show"
-  >
+    x-show="show" x-cloak>
     <i class="fas fa-check-circle banner-icon"></i> 
     <span>Success! Your action was completed successfully.</span>
     <button class="banner-close" @click="show = false" aria-label="Close">
@@ -843,7 +841,7 @@
 
     <section class="app-list pure-g" x-show="loaded_apps" x-transition>
       <div class="banner banner-info filter-empty-state"
-        x-show="loaded_apps && !fetchError && apps.length === 0">
+        x-show="loaded_apps && !fetchError && apps.length === 0" x-cloak>
         <i class="fas fa-info-circle banner-icon"></i>
         <span>
           This catalog has no micro-firmwares.
@@ -851,7 +849,7 @@
         </span>
       </div>
       <div class="banner banner-info filter-empty-state"
-        x-show="loaded_apps && apps.length > 0 && filteredApps().length === 0">
+        x-show="loaded_apps && apps.length x-cloak> 0 && filteredApps().length === 0">
         <i class="fas fa-info-circle banner-icon"></i>
         <span>No apps match the selected filters.</span>
       </div>
@@ -1023,7 +1021,7 @@
   <div x-data x-init="fetch('/system.shtml').then(r=>r.text()).then(h=>$el.outerHTML=h)"></div>
 
   <footer class="footer">
-    <p>&copy; 2025 GOODDATA LABS SLU. All rights reserved.</p>
+    <p>&copy; 2024-2026 GOODDATA LABS SLU. All rights reserved.</p>
   </footer>
 </body>
 

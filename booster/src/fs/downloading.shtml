@@ -1,80 +1,170 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 
 <head>
-  <title><!--#TITLEHDR--></title>
-
-  <!--#DWNLDSTS-->
-
-  <link rel="icon" href="data:;base64,=">
-
   <meta charset="UTF-8">
-  <!-- Important for mobile: ensures responsive scaling -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="data:;base64,=">
   <title><!--#TITLEHDR--></title>
 
-  <!-- Pure.css (CDN) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css"
     integrity="sha384-X38yfunGUhNzHpBaEBsWLO+A0HDYOQi8ufWDkZ0k9e0eXz/tH3II7uKZ9msv++Ls" crossorigin="anonymous" />
-  <!-- Grid responsiveness (sm, md, lg classes) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css" />
   <link rel="stylesheet" href="styles.css?v=1.0" />
-
-  <!-- Font Awesome for icons (CDN) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
     crossorigin="anonymous" referrerpolicy="no-referrer" />
 
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 
   <script>
-    // Spinner logic
-    const spinnerFrames = ['|', '/', '-', '\\', '|', '/', '-', '\\'];
-    let currentFrame = 0;
-
-    function updateSpinner() {
-      const spinner = document.getElementById('spinner-char');
-      spinner.textContent = spinnerFrames[currentFrame];
-      currentFrame = (currentFrame + 1) % spinnerFrames.length;
+    function downloadProgress() {
+      return {
+        // Mirrors appmngr_phase_t in include/appmngr.h
+        PH_IDLE: 0, PH_CONNECT: 1, PH_DOWNLOAD: 2, PH_VERIFY: 3,
+        PH_INSTALL: 4, PH_DONE: 5, PH_FAILED: 6,
+        appName: '<!--#DLNAME-->',
+        phase: 1,
+        pct: 0,
+        rx: 0,
+        tot: 0,
+        isFirmware: false,
+        errCode: 0,
+        errMsg: '',
+        pollTimer: null,
+        // Verify holds the filesystem lock for the whole MD5 read, so the
+        // server can stall for around a second. Tolerate a few dead polls
+        // rather than reporting a failure the device has not reported.
+        missed: 0,
+        init() {
+          this.poll();
+        },
+        poll() {
+          fetch('/dlstat.shtml', { cache: 'no-store' })
+            .then(r => r.text())
+            .then(t => {
+              const d = JSON.parse(t);
+              this.phase = d.ph;
+              this.pct = d.pct;
+              this.rx = d.rx;
+              this.tot = d.tot;
+              this.isFirmware = d.fw === 1;
+              this.errCode = d.err;
+              this.errMsg = d.msg;
+              this.missed = 0;
+              if (this.phase === this.PH_DONE) {
+                window.location.href = '/mngr_home.shtml';
+                return;
+              }
+              this.schedule();
+            })
+            .catch(() => {
+              this.missed++;
+              this.schedule();
+            });
+        },
+        schedule() {
+          if (this.phase === this.PH_FAILED) {
+            return;
+          }
+          this.pollTimer = setTimeout(() => this.poll(), 1000);
+        },
+        get failed() {
+          return this.phase === this.PH_FAILED;
+        },
+        get indeterminate() {
+          return this.tot === 0 && this.phase <= this.PH_DOWNLOAD;
+        },
+        get heading() {
+          if (this.failed) {
+            return this.isFirmware ? 'Firmware update failed' : 'Install failed';
+          }
+          return this.isFirmware ? 'Updating firmware' : 'Installing';
+        },
+        get sizeLabel() {
+          if (this.tot === 0) {
+            return this.kb(this.rx);
+          }
+          return this.kb(this.rx) + ' of ' + this.kb(this.tot);
+        },
+        kb(bytes) {
+          return Math.round(bytes / 1024) + ' KB';
+        },
+        stepState(step) {
+          if (this.failed) {
+            return this.phase > step ? 'done' : 'idle';
+          }
+          if (this.phase > step) {
+            return 'done';
+          }
+          return this.phase === step ? 'active' : 'idle';
+        }
+      };
     }
-
-    // Start the spinner
-    setInterval(updateSpinner, 50);
-
-    // Redirect after 20 seconds
-    setTimeout(() => {
-      window.location.href = '/mngr_home.shtml';
-    }, 30000);
   </script>
-
 </head>
 
-<body>
-  <!-- Blue Banner Header -->
+<body x-data="downloadProgress()" x-init="init()">
   <header class="header">
     <h1><!--#TITLEHDR--></h1>
   </header>
 
-  <main class="main-content-full-width">
-    <h2>Downloading the App</h2>
-    <div>
-      <br />
-      <p>
-        The app is now being downloaded to the device. This process may take 10 to 20 seconds.
-      </p>
-      <p>
-        When the download is complete, this page will automatically redirect to the home page of the Booster app, where
-        you can find and launch the app.
-      </p>
-      <p>
-        Don't try to refresh the page or navigate away from this page, until the download is complete.
-      </p>
-      <br />
-      <div id="spinner" class="spinner">
-        Downloading... <span id="spinner-char">|</span>
+  <main class="main-content">
+    <div class="progress-card">
+      <h2 x-text="heading">Installing</h2>
+      <p class="progress-app" x-text="appName" x-show="appName"></p>
+
+      <div x-show="!failed">
+        <div class="progress-track" :class="indeterminate ? 'progress-indeterminate' : ''">
+          <div class="progress-fill" :style="indeterminate ? '' : 'width:' + pct + '%'"></div>
+        </div>
+        <div class="progress-label">
+          <span x-text="indeterminate ? '' : pct + '%'"></span>
+          <span class="progress-bytes" x-show="phase === PH_DOWNLOAD" x-text="sizeLabel"></span>
+        </div>
+
+        <ul class="phase-list">
+          <li class="phase-item" :class="'phase-' + stepState(PH_CONNECT)">
+            <i class="fas" :class="stepState(PH_CONNECT) === 'done' ? 'fa-check-circle' : 'fa-circle'"></i>
+            <span>Connect</span>
+          </li>
+          <li class="phase-item" :class="'phase-' + stepState(PH_DOWNLOAD)">
+            <i class="fas" :class="stepState(PH_DOWNLOAD) === 'done' ? 'fa-check-circle' : 'fa-circle'"></i>
+            <span>Download</span>
+          </li>
+          <li class="phase-item" :class="'phase-' + stepState(PH_VERIFY)">
+            <i class="fas" :class="stepState(PH_VERIFY) === 'done' ? 'fa-check-circle' : 'fa-circle'"></i>
+            <span>Verify</span>
+          </li>
+          <li class="phase-item" :class="'phase-' + stepState(PH_INSTALL)">
+            <i class="fas" :class="stepState(PH_INSTALL) === 'done' ? 'fa-check-circle' : 'fa-circle'"></i>
+            <span>Install</span>
+          </li>
+        </ul>
+
+        <p class="progress-hint">Please keep this page open until the process finishes.</p>
+      </div>
+
+      <div x-show="failed" x-cloak>
+        <div class="banner banner-error">
+          <i class="fas fa-circle-exclamation banner-icon"></i>
+          <span x-text="errMsg || 'The download did not complete.'"></span>
+        </div>
+        <p class="progress-hint">Error code <span x-text="errCode"></span>.</p>
+        <div class="progress-actions">
+          <a class="pure-button pure-button-primary" href="/download_retry.cgi">Retry</a>
+          <a class="pure-button" href="/download_cancel.cgi">Cancel</a>
+        </div>
       </div>
     </div>
   </main>
+
+  <noscript>
+    <!--#DWNLDSTS-->
+  </noscript>
+
+  <footer class="footer">
+    <p>&copy; 2024-2026 GOODDATA LABS SLU. All rights reserved.</p>
+  </footer>
 </body>
 
 </html>

@@ -684,3 +684,100 @@ table.pure-table.pure-table-bordered tbody tr:hover {
 .pure-button-warning:hover {
   background-color: #c62828; /* Dark red */
 }
+
+/* Download / firmware-update progress page */
+.progress-card {
+  background: #fff;
+  border-radius: 6px;
+  padding: 24px;
+  margin-top: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.progress-app {
+  font-family: "Courier New", Courier, monospace;
+  font-weight: bold;
+  color: #1f2937;
+  margin: 4px 0 18px 0;
+}
+
+.progress-track {
+  height: 14px;
+  background: #eef4fb;
+  border: 1px solid #c7d8ee;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0;
+  background: #0078e7;
+  border-radius: 7px;
+  transition: width 0.4s ease;
+}
+
+.progress-indeterminate .progress-fill {
+  width: 40%;
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes progress-slide {
+  0% { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  color: #555;
+  margin-top: 8px;
+  min-height: 18px;
+}
+
+.progress-bytes {
+  color: #777;
+}
+
+.phase-list {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+}
+
+.phase-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #777;
+}
+
+.phase-item i {
+  font-size: 12px;
+}
+
+.phase-done {
+  color: #065f46;
+}
+
+.phase-active {
+  color: #0078e7;
+  font-weight: bold;
+}
+
+.progress-hint {
+  color: #777;
+  font-size: 13px;
+  margin-top: 18px;
+}
+
+.progress-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 18px;
+}
