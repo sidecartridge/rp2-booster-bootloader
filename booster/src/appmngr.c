@@ -1938,8 +1938,7 @@ static FRESULT __not_in_flash_func(storeUF2FileToFlash)(const char *filename,
 
   // Static staging buffer, deliberately not malloc'd -- see
   // APP_FLASH_COPY_CHUNK_SIZE in appmngr.h for why (heap fragmentation at
-  // launch time made a large contiguous allocation unreliable, and
-  // PICO_MALLOC_PANIC turns that into a panic rather than a recoverable NULL).
+  // launch time made a large contiguous allocation unreliable).
   static uint8_t accumBufStorage[APP_FLASH_COPY_CHUNK_SIZE];
   if (userPageSize > sizeof(accumBufStorage)) {
     DPRINTF("Chunk size %u exceeds the %u byte staging buffer\n", userPageSize,
@@ -2772,6 +2771,27 @@ static void __not_in_flash_func(program_image_from_flash_src)(
 
   flash_flush_cache();
   restore_interrupts(ints);
+}
+
+void appmngr_cleanup_upgrade_image(void) {
+  SettingsConfigEntry *folder =
+      settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER);
+  if (folder == NULL) {
+    return;
+  }
+
+  char upgrade_filename[256] = {0};
+  snprintf(upgrade_filename, sizeof(upgrade_filename), "%s/upgrade.bin",
+           folder->value);
+
+  // No async-context lock here on purpose: this runs from mngr_init() before
+  // the web server is started, so nothing else can be inside FatFs yet, and
+  // taking the lock would depend on the cyw43 context being up.
+  FRESULT res = f_unlink(upgrade_filename);
+  if (res == FR_OK) {
+    DPRINTF("Removed the firmware image left by the last upgrade: %s\n",
+            upgrade_filename);
+  }
 }
 
 download_err_t appmngr_confirm_download_firmware() {

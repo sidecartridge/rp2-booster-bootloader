@@ -231,20 +231,34 @@ int mngr_init() {
       }
       sdcard_ready = true;
 
+      // We are running, so whatever the last upgrade wrote to flash boots and
+      // the image it was flashed from is dead weight. An interrupted flash
+      // never reaches this point: BOOT_FEATURE is still UPGRADER, so the
+      // device reboots into the upgrader and retries from the same file.
+      appmngr_cleanup_upgrade_image();
+
       // appmngr load table
       uint8_t *table = malloc(FLASH_SECTOR_SIZE);
-      uint16_t table_length = 0;
-      appmngr_load_apps_lookup_table(table, &table_length);
-      appmngr_print_apps_lookup_table(table, table_length);
+      if (table == NULL) {
+        // malloc returns NULL rather than panicking (PICO_MALLOC_PANIC 0),
+        // so every allocation has to be checked. Skipping the sync leaves the
+        // lookup table as it is on flash, which is recoverable; the device
+        // still boots.
+        DPRINTF("Cannot allocate the apps lookup table; skipping the sync\n");
+      } else {
+        uint16_t table_length = 0;
+        appmngr_load_apps_lookup_table(table, &table_length);
+        appmngr_print_apps_lookup_table(table, table_length);
 
-      // Now, try to sync the apps lookup table with the JSON files
-      appmngr_sync_lookup_table();
+        // Now, try to sync the apps lookup table with the JSON files
+        appmngr_sync_lookup_table();
 
-      // appmngr load table
-      memset(table, 0, FLASH_SECTOR_SIZE);
-      appmngr_load_apps_lookup_table(table, &table_length);
-      appmngr_print_apps_lookup_table(table, table_length);
-      free(table);
+        // appmngr load table
+        memset(table, 0, FLASH_SECTOR_SIZE);
+        appmngr_load_apps_lookup_table(table, &table_length);
+        appmngr_print_apps_lookup_table(table, table_length);
+        free(table);
+      }
     } else {
       DPRINTF("Error initializing the SD card: %i\n", sdcard_err);
     }
@@ -448,6 +462,36 @@ int mngr_init() {
             break;
           }
 
+          // Promote the verified image to upgrade.bin NOW, not when the user
+          // confirms. tmp.download is shared scratch: the microfirmware
+          // installs, this download and the upgrade.md5 fetch all write it.
+          // Renaming at confirm time meant anything downloaded in between --
+          // a microfirmware install, say -- was promoted instead, so the
+          // upgrader could write a microfirmware into the booster slot. The
+          // image is verified and named in one step here, and upgrade.bin is
+          // written by this path only.
+          download_err_t close_err = appmngr_finish_download_firmware();
+          if (close_err != DOWNLOAD_OK) {
+            DPRINTF("Error closing the firmware image: %d\n", close_err);
+            appmngr_download_firmware_error(close_err);
+            appmngr_set_download_phase(APPMNGR_PHASE_FAILED);
+            appmngr_confirm_failed_download_firmware();
+            appmngr_download_firmware_status(DOWNLOAD_STATUS_FAILED);
+            firmware_upgrade_state = FIRMWARE_UPGRADE_FAILED;
+            break;
+          }
+          download_err_t promote_err = appmngr_confirm_download_firmware();
+          if (promote_err != DOWNLOAD_OK) {
+            DPRINTF("Error promoting the image to upgrade.bin: %d\n",
+                    promote_err);
+            appmngr_download_firmware_error(promote_err);
+            appmngr_set_download_phase(APPMNGR_PHASE_FAILED);
+            appmngr_confirm_failed_download_firmware();
+            appmngr_download_firmware_status(DOWNLOAD_STATUS_FAILED);
+            firmware_upgrade_state = FIRMWARE_UPGRADE_FAILED;
+            break;
+          }
+
           // Save the app info to the SD card
           appmngr_download_firmware_error(DOWNLOAD_OK);
           appmngr_set_download_phase(APPMNGR_PHASE_DONE);
@@ -579,17 +623,10 @@ void mngr_firmwareUpgradeInstall(void) {
   appmngr_download_firmware_error(DOWNLOAD_OK);
   appmngr_download_firmware_status(DOWNLOAD_STATUS_IDLE);
 
-  download_err_t err = appmngr_finish_download_firmware();
-  appmngr_download_firmware_error(err);
-  if (err != DOWNLOAD_OK) {
-    DPRINTF("Error finishing download firmware\n");
-    appmngr_confirm_failed_download_firmware();
-    appmngr_download_firmware_status(DOWNLOAD_STATUS_FAILED);
-    firmware_upgrade_state = FIRMWARE_UPGRADE_FAILED;
-  } else {
-    appmngr_confirm_download_firmware();
-    appmngr_firmwareUpgradeStart();
-  }
+  // The image was closed, verified and renamed to upgrade.bin when the
+  // download finished, so nothing is left to do here but write the upgrader
+  // to the start of flash and reboot into it. This function does not return.
+  appmngr_firmwareUpgradeStart();
 }
 
 firmware_upgrade_state_t mngr_get_firmwareUpgradeState(void) {

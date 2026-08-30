@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.4.1 (2026-08-30) - release
+
+Firmware only. Fixes a crash on boot with an SD card that has no apps folder, a misleading message on the Apps page, and two problems with the firmware update process.
+
+### Fixes
+- **The device no longer crashes on boot when the SD card has no apps folder.** Creating the folder asked the filesystem for a buffer as large as 32 KB, and a failed allocation stopped the device with "Out of memory" instead of falling back to a smaller one. A fresh or newly formatted card is the usual way to hit this.
+- The Apps page no longer shows "No apps match the selected filters." while apps are listed. The message now appears only when a filter really does exclude everything.
+- **A firmware update can no longer install the wrong image.** The verified download only got its final name when you pressed Confirm, so anything downloaded in between, such as installing a microfirmware, was installed instead. The download is now checked and named in one step, as soon as it finishes.
+- The firmware image is deleted from the SD card once the new firmware has booted. It was left behind after every update, around 1.4 MB each time. It is kept until the new firmware is confirmed running, so an interrupted update can still retry from it.
+
+---
+
 ## v2.4.0 (2026-08-17) - release
 
 Firmware only. Installs and firmware updates are far more reliable, show real progress while they run, and the firmware update now checks the download before installing it.
