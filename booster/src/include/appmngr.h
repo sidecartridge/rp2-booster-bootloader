@@ -305,6 +305,18 @@ bool appmngr_has_expected_firmware_md5(void);
  */
 download_err_t appmngr_verify_firmware_md5(void);
 
+/**
+ * @brief Delete the firmware image left behind by a completed upgrade.
+ *
+ * The upgrader flashes upgrade.bin and jumps to the new firmware without
+ * removing it, so roughly 1.4MB stays on the card indefinitely. Call this from
+ * boot only: reaching the booster proves the firmware in flash runs, whereas
+ * an interrupted flash never gets that far -- it reboots into the upgrader
+ * again with BOOT_FEATURE still UPGRADER and retries from this very file.
+ * Deleting it anywhere earlier would throw away that recovery copy.
+ */
+void appmngr_cleanup_upgrade_image(void);
+
 /** @brief Close and delete the partial download file (web UI Cancel). */
 void appmngr_cleanup_download(void);
 

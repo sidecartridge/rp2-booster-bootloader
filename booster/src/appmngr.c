@@ -2773,6 +2773,27 @@ static void __not_in_flash_func(program_image_from_flash_src)(
   restore_interrupts(ints);
 }
 
+void appmngr_cleanup_upgrade_image(void) {
+  SettingsConfigEntry *folder =
+      settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER);
+  if (folder == NULL) {
+    return;
+  }
+
+  char upgrade_filename[256] = {0};
+  snprintf(upgrade_filename, sizeof(upgrade_filename), "%s/upgrade.bin",
+           folder->value);
+
+  // No async-context lock here on purpose: this runs from mngr_init() before
+  // the web server is started, so nothing else can be inside FatFs yet, and
+  // taking the lock would depend on the cyw43 context being up.
+  FRESULT res = f_unlink(upgrade_filename);
+  if (res == FR_OK) {
+    DPRINTF("Removed the firmware image left by the last upgrade: %s\n",
+            upgrade_filename);
+  }
+}
+
 download_err_t appmngr_confirm_download_firmware() {
   // Now rename the tmp files to the final filenames
   char tmp_binary_filename[256] = {0};
