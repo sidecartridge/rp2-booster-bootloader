@@ -233,18 +233,26 @@ int mngr_init() {
 
       // appmngr load table
       uint8_t *table = malloc(FLASH_SECTOR_SIZE);
-      uint16_t table_length = 0;
-      appmngr_load_apps_lookup_table(table, &table_length);
-      appmngr_print_apps_lookup_table(table, table_length);
+      if (table == NULL) {
+        // malloc returns NULL rather than panicking (PICO_MALLOC_PANIC 0),
+        // so every allocation has to be checked. Skipping the sync leaves the
+        // lookup table as it is on flash, which is recoverable; the device
+        // still boots.
+        DPRINTF("Cannot allocate the apps lookup table; skipping the sync\n");
+      } else {
+        uint16_t table_length = 0;
+        appmngr_load_apps_lookup_table(table, &table_length);
+        appmngr_print_apps_lookup_table(table, table_length);
 
-      // Now, try to sync the apps lookup table with the JSON files
-      appmngr_sync_lookup_table();
+        // Now, try to sync the apps lookup table with the JSON files
+        appmngr_sync_lookup_table();
 
-      // appmngr load table
-      memset(table, 0, FLASH_SECTOR_SIZE);
-      appmngr_load_apps_lookup_table(table, &table_length);
-      appmngr_print_apps_lookup_table(table, table_length);
-      free(table);
+        // appmngr load table
+        memset(table, 0, FLASH_SECTOR_SIZE);
+        appmngr_load_apps_lookup_table(table, &table_length);
+        appmngr_print_apps_lookup_table(table, table_length);
+        free(table);
+      }
     } else {
       DPRINTF("Error initializing the SD card: %i\n", sdcard_err);
     }

@@ -1938,8 +1938,7 @@ static FRESULT __not_in_flash_func(storeUF2FileToFlash)(const char *filename,
 
   // Static staging buffer, deliberately not malloc'd -- see
   // APP_FLASH_COPY_CHUNK_SIZE in appmngr.h for why (heap fragmentation at
-  // launch time made a large contiguous allocation unreliable, and
-  // PICO_MALLOC_PANIC turns that into a panic rather than a recoverable NULL).
+  // launch time made a large contiguous allocation unreliable).
   static uint8_t accumBufStorage[APP_FLASH_COPY_CHUNK_SIZE];
   if (userPageSize > sizeof(accumBufStorage)) {
     DPRINTF("Chunk size %u exceeds the %u byte staging buffer\n", userPageSize,

@@ -102,10 +102,11 @@
 //   - With the cap the heap is ~47KB, so 64K could not be allocated anyway, and
 //     even 32K failed at launch: by then the session has run the web server,
 //     parsed catalog JSON, and done a TLS handshake, so a single CONTIGUOUS 32K
-//     block is not obtainable even though the total free heap is larger. malloc
-//     panics rather than returning NULL (PICO_MALLOC_PANIC), so that surfaced
-//     as
-//     "*** PANIC *** Out of memory".
+//     block is not obtainable even though the total free heap is larger. At the
+//     time malloc panicked rather than returning NULL, so that surfaced as
+//     "*** PANIC *** Out of memory". (PICO_MALLOC_PANIC is 0 since v2.4.1, so
+//     the same failure would now return NULL -- but a static buffer is still
+//     the right answer here.)
 // A static buffer removes the whole failure class: no allocation, no
 // fragmentation sensitivity, and it leaves the heap free for TLS.
 #define APP_FLASH_COPY_CHUNK_SIZE FLASH_SECTOR_SIZE
