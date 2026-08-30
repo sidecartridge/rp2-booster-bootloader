@@ -849,7 +849,7 @@
         </span>
       </div>
       <div class="banner banner-info filter-empty-state"
-        x-show="loaded_apps && apps.length x-cloak> 0 && filteredApps().length === 0">
+        x-show="loaded_apps && apps.length > 0 && filteredApps().length === 0" x-cloak>
         <i class="fas fa-info-circle banner-icon"></i>
         <span>No apps match the selected filters.</span>
       </div>
