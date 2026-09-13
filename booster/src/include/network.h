@@ -64,6 +64,9 @@
 #define MAX_BSSID_LENGTH 20
 #define MAX_PASSWORD_LENGTH \
   68  // Password can have up to 64 characters + null terminator + padding
+// A WPA/WPA2 passphrase is 8 to 63 printable characters (IEEE 802.11i).
+#define NETWORK_WPA_PASSPHRASE_MIN_LENGTH 8
+#define NETWORK_WPA_PASSPHRASE_MAX_LENGTH 63
 #define WIFI_AP_NETMASK "255.255.255.0"
 #define WIFI_AP_GATEWAY "192.168.4.1"
 #define WIFI_AP_SSID "SIDECART"
@@ -313,16 +316,17 @@ const char* network_getSignalQualityLabel(int32_t rssi);
 bool network_parseSSID(const char* ssid, char* outSSID);
 
 /**
- * @brief Parses and cleans up a WiFi network password according to the IEEE
- * 802.11 standard.
+ * @brief Parses and cleans up a WiFi network password from .wificonf.
  *
- * This function processes the provided password string by truncating it if it
- * exceeds WIFI_AP_PASS_MAX_LENGTH. The cleaned and possibly truncated password
- * is stored in outPassword.
+ * Control characters are dropped and up to NETWORK_WPA_PASSPHRASE_MAX_LENGTH
+ * printable characters are copied, spaces included. outPassword always
+ * receives what was kept, so the empty PASS of an open network is stored as
+ * empty, and a longer value keeps its first 63 characters and returns false.
  *
- * @param password The original WiFi network password string.
- * @param outPassword The buffer where the cleaned up password is written.
- * @return true if the password is valid, false otherwise.
+ * @param password The password text as written in the file.
+ * @param outPassword Buffer of at least MAX_PASSWORD_LENGTH bytes.
+ * @return true for a passphrase of 8 to 63 printable characters that is not
+ * all spaces, false otherwise.
  */
 bool network_parsePassword(const char* password, char* outPassword);
 
