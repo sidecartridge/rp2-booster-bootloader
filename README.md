@@ -247,6 +247,39 @@ picotool load -xv /path/to/rp-booster-<version>.uf2
     Your WiFi setup is now complete. From now on, the Booster app will boot directly into **Manager mode**.  
     See the next section for details on using Manager mode.
 
+### Configuring WiFi from a file
+
+Instead of the steps above, you can put a text file named `.wificonf` in the root folder of the microSD card. On the first boot Booster reads it in Factory mode, stores the settings and reboots straight into Manager mode without showing the QR screens. This is the way to set up a device without a phone or a browser, and the only way to bring up a device on a network that has no DHCP server.
+
+```
+SSID=MyNetwork
+PASS=secret
+AUTH=5
+; Optional. Without these lines the device uses DHCP.
+TCPIP_DHCP=No
+TCPIP_ADDRESS=192.168.1.50
+TCPIP_NETMASK=255.255.255.0
+TCPIP_GATEWAY=192.168.1.1
+TCPIP_DNS=192.168.1.1,8.8.8.8
+```
+
+| Key | Meaning |
+| --- | --- |
+| `SSID` | Network name. |
+| `PASS` | Network password. |
+| `AUTH` | Security type as a number: `0` open, `1` WPA TKIP, `5` WPA2 AES, `8` WPA2 mixed. |
+| `TCPIP_DHCP` | Optional. `Yes`/`No`, `True`/`False`, `1`/`0`, `Y`/`N` or `T`/`F`, in any case. Leave the line out to use DHCP. |
+| `TCPIP_ADDRESS`, `TCPIP_NETMASK`, `TCPIP_GATEWAY` | Required when `TCPIP_DHCP` is off. IPv4 addresses in dotted form. |
+| `TCPIP_DNS` | Optional. One DNS server, or two separated by a comma. Defaults to `8.8.8.8`. |
+
+Rules:
+
+- Lines starting with `;` or `#` are comments. Unknown keys are ignored.
+- Without a `TCPIP_DHCP` line the device uses DHCP and the other `TCPIP_` lines are ignored.
+- When `TCPIP_DHCP` is off, the static address is used only if address, netmask and gateway are all present and valid. If any of them is missing or wrong, or the DNS line is present but wrong, the whole block is ignored and the device uses DHCP, so a mistake in the file never leaves it unreachable.
+
+Booster reads the file at every boot, in Factory mode and in Manager mode alike, before it connects to WiFi. While the file is on the card it is the WiFi configuration: a change to the file takes effect on the next power cycle, and it overrides anything set from the web interface. Remove the file to manage WiFi from the web interface again. Nothing is written to flash when the file matches what is already stored.
+
 ## Booster Manager Mode
 
 In **Manager mode**, the Booster app tries to connect to your configured WiFi network and then connects to the public repository of microfirmware apps.
@@ -313,6 +346,8 @@ The **WiFi view** shows the list of available WiFi networks and permits some bas
 The system information banner also shows the Pico W MAC address, which is useful when configuring router allow-lists or debugging network issues.
 
 Don't forget to click the **Save** button to save the changes!
+
+> **Note**: While a `.wificonf` file is on the microSD card, the TCP/IP configuration and the network list are shown grayed out and cannot be changed here, and a banner says so. The file re-applies those settings at every boot, so a change made on this page would only last until the next reboot. Remove or rename the file and reboot to manage them from this page again.
 
 It's also possible to change the WiFi network. To do this, click on the new WiFi network from the list. A new window will open with the WiFi network details. Enter the password and click the **Connect** button.
 

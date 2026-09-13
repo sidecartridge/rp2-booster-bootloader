@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.4.2 (unreleased)
+
+Firmware only. The `.wificonf` file can now set a static IP address, for networks without DHCP.
+
+### New features
+- **The `.wificonf` file can disable DHCP and set a static IPv4 configuration.** New optional keys `TCPIP_DHCP`, `TCPIP_ADDRESS`, `TCPIP_NETMASK`, `TCPIP_GATEWAY` and `TCPIP_DNS` next to the existing `SSID`, `PASS` and `AUTH`. A file without them behaves exactly as before. The static address is applied only when address, netmask and gateway are all present and valid; otherwise the device keeps using DHCP, so a mistake in the file never leaves it unreachable. DNS is optional. The format is documented in the README.
+- **The `.wificonf` file is read at every boot, not only in Factory mode.** While the file is on the card it is the WiFi configuration, so it can also change the settings of a device that is already set up: edit the file and power-cycle. Flash is written only when the file differs from what is stored.
+- While a `.wificonf` file is on the microSD card, the Network page shows the TCP/IP configuration and the network list grayed out and read-only, with a banner explaining that the file takes precedence. Saving those settings is refused by the device as well, so nothing can be changed there that the file would undo at the next boot.
+
+---
+
 ## v2.4.1 (2026-08-30) - release
 
 Firmware only. Fixes a crash on boot with an SD card that has no apps folder, a misleading message on the Apps page, and two problems with the firmware update process.

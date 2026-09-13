@@ -137,17 +137,25 @@
             <p>&nbsp;</p>
             <p>
                 If you opt for the '.wificonf' file mode, copy this template and substitute the parameters with your own
-                SSID, password and WiFi authentication security type. Then reboot the device after inserting the microSD
-                card with the file. It will automatically start in the management mode, bypassing the "dual QR" screen.
+                SSID, password and WiFi authentication security type. AUTH is the security type as a number: 0 for an
+                open network, 1 for WPA TKIP PSK, 5 for WPA2 AES PSK, 8 for WPA2 mixed PSK. The network list below shows
+                the security type of each network. Then reboot the device after inserting the microSD card with the
+                file. It will automatically start in the management mode, bypassing the "dual QR" screen. The file is
+                read at every boot, so you can also use it later to change the settings of a configured device.
+                The device gets its address by DHCP unless you also uncomment and fill in the TCPIP lines. A static
+                address is used only when address, netmask and gateway are all present and valid; otherwise DHCP stays on.
             <div class="terminal-text">
                 <pre>SSID=[YOUR SSID]
 PASS=[YOUR PASS]
-; AUTH values. Use only numeric value
-OPEN=0
-WPA_TKIP_PSK=1
-WPA2_AES_PSK=5
-WPA2_MIXED_PSK=8
-AUTH=[YOUR AUTH MODE]</pre>
+; AUTH: 0 = OPEN, 1 = WPA_TKIP_PSK, 5 = WPA2_AES_PSK, 8 = WPA2_MIXED_PSK
+AUTH=[YOUR AUTH MODE]
+; Optional static TCP/IP. Remove the leading ; to use it.
+; TCPIP_DHCP accepts Yes/No, True/False, 1/0, Y/N, T/F.
+;TCPIP_DHCP=No
+;TCPIP_ADDRESS=[STATIC IPv4 ADDRESS]
+;TCPIP_NETMASK=[NETMASK]
+;TCPIP_GATEWAY=[GATEWAY]
+;TCPIP_DNS=[DNS SERVER, OR TWO SEPARATED BY A COMMA]</pre>
             </div>
         </section>
         <section>
