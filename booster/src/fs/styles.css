@@ -781,3 +781,13 @@ table.pure-table.pure-table-bordered tbody tr:hover {
   gap: 12px;
   margin-top: 18px;
 }
+
+/* Sections managed by /.wificonf on the microSD card (EPIC-10): visible, grayed, inert */
+.locked {
+  opacity: 0.55;
+}
+.locked input,
+.locked select,
+.locked button {
+  cursor: not-allowed;
+}

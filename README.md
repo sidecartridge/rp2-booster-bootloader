@@ -247,6 +247,91 @@ picotool load -xv /path/to/rp-booster-<version>.uf2
     Your WiFi setup is now complete. From now on, the Booster app will boot directly into **Manager mode**.  
     See the next section for details on using Manager mode.
 
+### Configuring WiFi from a file
+
+A text file named `.wificonf` in the root folder of the microSD card sets the WiFi network and, optionally, a static IP address. Use it to:
+
+- set up a device without a phone or a browser,
+- bring up a device on a network that has no DHCP server,
+- change the network settings of a device that is already set up.
+
+#### 1. Create the file
+
+Create a plain text file named exactly `.wificonf`, with the leading dot and no extension. Some editors add an extension or save formatted text:
+
+- **Windows Notepad**: in the Save dialog set *Save as type* to *All files*, otherwise the file is saved as `.wificonf.txt`.
+- **macOS TextEdit**: choose *Make Plain Text* from the *Format* menu before saving. Finder hides names that start with a dot; press `Cmd+Shift+.` to show them.
+- **Linux**: any text editor works.
+
+#### 2. Write the settings
+
+For a network with DHCP, three lines are enough:
+
+```
+SSID=MyNetwork
+PASS=MyPassword
+AUTH=5
+```
+
+For a static IP address, add the TCP/IP lines:
+
+```
+SSID=MyNetwork
+PASS=MyPassword
+AUTH=5
+TCPIP_DHCP=No
+TCPIP_ADDRESS=192.168.1.50
+TCPIP_NETMASK=255.255.255.0
+TCPIP_GATEWAY=192.168.1.1
+TCPIP_DNS=192.168.1.1,8.8.8.8
+```
+
+| Key | Needed | Value |
+| --- | --- | --- |
+| `SSID` | For a new device | Network name, exactly as your router shows it. Upper and lower case matter. |
+| `PASS` | For a new device | Network password. Leave the value empty for an open network. |
+| `AUTH` | For a new device | Security type as a number: `0` open, `1` WPA TKIP, `5` WPA2 AES, `8` WPA2 mixed. `5` suits a typical WPA2 router. WPA3-only networks cannot be selected. |
+| `TCPIP_DHCP` | No | `No` to use the static settings below, `Yes` to use DHCP. `True`/`False`, `1`/`0`, `Y`/`N` and `T`/`F` work too, in any case. |
+| `TCPIP_ADDRESS` | When `TCPIP_DHCP` is `No` | The device's IPv4 address, for example `192.168.1.50`. Choose one outside the range your router hands out by DHCP. |
+| `TCPIP_NETMASK` | When `TCPIP_DHCP` is `No` | Usually `255.255.255.0`. |
+| `TCPIP_GATEWAY` | When `TCPIP_DHCP` is `No` | Your router's address, for example `192.168.1.1`. |
+| `TCPIP_DNS` | No | One DNS server, or two separated by a comma. Without it the device keeps the DNS servers it already has, which is `8.8.8.8` on a new device. |
+
+Writing rules:
+
+- One setting per line, as `KEY=value`. Key names work in any case.
+- On the `SSID` and `PASS` lines everything after the `=` is used as written, spaces included, so do not put spaces around the `=` there.
+- Lines starting with `;` or `#` are comments. Unknown keys are ignored.
+- Windows and Unix line endings both work.
+
+#### 3. Boot the device
+
+Copy the file to the root folder of the microSD card, not to the apps folder. Insert the card and power on.
+
+- **A new device** starts in Factory mode, reads the file, saves the settings and reboots straight into Manager mode, without the QR code screens.
+- **A device that is already set up** applies the file in Manager mode before it connects, so the new settings take effect on that same boot. Nothing is written to flash when the file matches the stored settings.
+
+Once connected, the Atari screen shows the network name and the device's address. With static settings, that address is the one in `TCPIP_ADDRESS`.
+
+#### How the TCP/IP lines behave
+
+- Without a `TCPIP_DHCP` line, the other `TCPIP_` lines are ignored and the device keeps its current TCP/IP settings. A new device uses DHCP.
+- To go back to DHCP, write `TCPIP_DHCP=Yes`. Deleting the `TCPIP_` lines is not enough, because the device keeps the static settings it already has.
+- With `TCPIP_DHCP=No`, the static settings are applied only if `TCPIP_ADDRESS`, `TCPIP_NETMASK` and `TCPIP_GATEWAY` are all present and valid, and `TCPIP_DNS` is valid when present. If any of them is missing or malformed, every `TCPIP_` line is ignored and the device keeps its current settings.
+- Addresses are checked for format only. An address that is well formed but wrong for your network, such as one on another subnet, is applied. To recover, correct the file on a computer and power-cycle the device.
+
+#### While the file is on the card
+
+The file is applied at every boot, so while it is on the card it decides the WiFi network and the TCP/IP settings:
+
+- On the **Network** page, a banner explains this, and the TCP/IP configuration and the network list are grayed out and read-only. The WiFi settings above them (country, hostname, power and RSSI) stay editable.
+- A factory reset does not remove it either: the file is applied again on the next boot.
+- To manage the network from the web interface again, delete the file or rename it, for example to `wificonf.bak`, and power-cycle. The device keeps the settings the file last applied.
+
+> **Note**: The file holds your WiFi password in plain text. Anyone with the microSD card can read it.
+
+> **Upgrading from v2.4.1 or earlier**: older firmware read the file only during the first setup. If you set up your device with a `.wificonf` file and left it on the card, from v2.4.2 on it is applied at every boot and replaces any WiFi or TCP/IP settings you changed later on the Network page. Delete or rename the file if you manage WiFi from the web interface.
+
 ## Booster Manager Mode
 
 In **Manager mode**, the Booster app tries to connect to your configured WiFi network and then connects to the public repository of microfirmware apps.
@@ -313,6 +398,8 @@ The **WiFi view** shows the list of available WiFi networks and permits some bas
 The system information banner also shows the Pico W MAC address, which is useful when configuring router allow-lists or debugging network issues.
 
 Don't forget to click the **Save** button to save the changes!
+
+> **Note**: While a `.wificonf` file is on the microSD card, a banner at the top of this page says so, and the **TCP/IP configuration** and the **Network list** are grayed out and read-only. The file applies those settings again at every boot, so a change made here would be lost at the next reboot. The WiFi settings (country, hostname, power and RSSI) stay editable. To change the network from this page, delete or rename the file and power-cycle the device. See [Configuring WiFi from a file](#configuring-wifi-from-a-file).
 
 It's also possible to change the WiFi network. To do this, click on the new WiFi network from the list. A new window will open with the WiFi network details. Enter the password and click the **Connect** button.
 

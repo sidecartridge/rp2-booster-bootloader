@@ -1,5 +1,22 @@
 # Changelog
 
+## v2.4.2 (unreleased)
+
+Firmware only. The `.wificonf` file on the microSD card can now set a static IP address, and it is applied at every boot, so it can also change the network settings of a device that is already set up.
+
+### New features
+- **Static IP address from the `.wificonf` file.** Add `TCPIP_DHCP=No` with `TCPIP_ADDRESS`, `TCPIP_NETMASK` and `TCPIP_GATEWAY`, and optionally `TCPIP_DNS` with one or two servers. `TCPIP_DHCP=Yes` switches back to DHCP. This is the way to set up a device on a network without a DHCP server. The format, with examples, is in [Configuring WiFi from a file](README.md#configuring-wifi-from-a-file).
+- **Malformed static settings are ignored, not applied.** The static settings are used only when address, netmask and gateway are all present and valid, and the DNS line is valid when present. Otherwise every `TCPIP_` line is ignored and the device keeps the settings it has.
+
+### Changes
+- **The `.wificonf` file is applied at every boot, not only during the first setup.** Edit the file and power-cycle to change the network settings of a configured device. Flash is written only when the file differs from the stored settings.
+- **Check your microSD card before upgrading if you set up with a `.wificonf` file.** If the file is still on the card, it now replaces at every boot any WiFi or TCP/IP settings you changed later on the Network page. Delete or rename the file if you manage WiFi from the web interface.
+- While a `.wificonf` file is on the card, the TCP/IP configuration and the network list on the Network page are grayed out and read-only, with a banner explaining why. The device refuses changes to those settings as well, so nothing can be saved there that the file would undo at the next boot.
+- The file is read more leniently. Key names work in any case, and lines starting with `#` are comments as well as lines starting with `;`.
+- The first setup page lists the `AUTH` values and shows the optional TCP/IP lines in its example file.
+
+---
+
 ## v2.4.1 (2026-08-30) - release
 
 Firmware only. Fixes a crash on boot with an SD card that has no apps folder, a misleading message on the Apps page, and two problems with the firmware update process.

@@ -185,6 +185,7 @@ target_sources(${PROJECT_NAME} PRIVATE
         select.c
         term.c
         version.c
+        wificonf.c
         cjson/cJSON.c
         httpc/httpc.c
         md5/md5.c

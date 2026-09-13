@@ -51,6 +51,11 @@
 
 #define NETWORK_MAX_STRING_LENGTH 32
 
+// "255.255.255.255" plus the terminator, and room for the "a,b" list of one
+// or two resolvers that PARAM_WIFI_DNS stores (15 + 1 + 15 + 1).
+#define NETWORK_IPV4_STR_MAX 16
+#define NETWORK_DNS_LIST_STR_MAX (NETWORK_IPV4_STR_MAX * 2)
+
 #define NETWORK_MAC_SIZE 6
 
 #define MAX_NETWORKS 100
@@ -320,6 +325,51 @@ bool network_parseSSID(const char* ssid, char* outSSID);
  * @return true if the password is valid, false otherwise.
  */
 bool network_parsePassword(const char* password, char* outPassword);
+
+/**
+ * @brief Parses a strict IPv4 dotted quad meant for a host, a gateway or a
+ * resolver.
+ *
+ * Exactly four decimal octets (0..255) separated by single dots, with leading
+ * and trailing blanks tolerated. Narrower on purpose than lwIP's
+ * ipaddr_addr(), which also accepts "1.2.3", hexadecimal and octal octets.
+ * 0.0.0.0 and 255.255.255.255 are rejected: the first is "any" and the second
+ * is both the broadcast address and IPADDR_NONE.
+ *
+ * @param text       Input text.
+ * @param outAddress Buffer of at least NETWORK_IPV4_STR_MAX bytes that
+ *                   receives the canonical "a.b.c.d" text on success.
+ * @return true if valid, false otherwise (outAddress is then untouched).
+ */
+bool network_parseIPv4Address(const char* text, char* outAddress);
+
+/**
+ * @brief Parses a strict IPv4 netmask.
+ *
+ * Same grammar as network_parseIPv4Address(), and the value must be
+ * contiguous (ones followed by zeros). /0 and /32 are rejected as well:
+ * neither leaves room for a gateway on the link.
+ *
+ * @param text       Input text.
+ * @param outNetmask Buffer of at least NETWORK_IPV4_STR_MAX bytes that
+ *                   receives the canonical text on success.
+ * @return true if valid, false otherwise (outNetmask is then untouched).
+ */
+bool network_parseIPv4Netmask(const char* text, char* outNetmask);
+
+/**
+ * @brief Parses one or two DNS servers separated by a comma, the format
+ * PARAM_WIFI_DNS stores.
+ *
+ * Each entry must satisfy network_parseIPv4Address(). An empty entry, a
+ * trailing comma or a third entry makes the whole list invalid.
+ *
+ * @param text    Input text.
+ * @param outList Buffer of at least NETWORK_DNS_LIST_STR_MAX bytes that
+ *                receives the canonical "a" or "a,b" text on success.
+ * @return true if valid, false otherwise (outList is then untouched).
+ */
+bool network_parseDnsList(const char* text, char* outList);
 
 /**
  * @brief Returns a human-readable string for the WiFi station connection

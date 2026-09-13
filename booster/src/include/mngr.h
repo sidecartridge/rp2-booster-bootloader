@@ -35,6 +35,7 @@
 #include "select.h"
 #include "term.h"
 #include "version.h"
+#include "wificonf.h"
 
 typedef enum {
   FIRMWARE_UPGRADE_IDLE,
