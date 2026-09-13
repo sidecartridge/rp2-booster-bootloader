@@ -289,7 +289,7 @@ TCPIP_DNS=192.168.1.1,8.8.8.8
 | Key | Needed | Value |
 | --- | --- | --- |
 | `SSID` | For a new device | Network name, exactly as your router shows it. Upper and lower case matter. |
-| `PASS` | For a new device | Network password. Leave the value empty for an open network. |
+| `PASS` | For a new device | Network password, 8 to 63 characters. Leave the value empty for an open network. |
 | `AUTH` | For a new device | Security type as a number: `0` open, `1` WPA TKIP, `5` WPA2 AES, `8` WPA2 mixed. `5` suits a typical WPA2 router. WPA3-only networks cannot be selected. |
 | `TCPIP_DHCP` | No | `No` to use the static settings below, `Yes` to use DHCP. `True`/`False`, `1`/`0`, `Y`/`N` and `T`/`F` work too, in any case. |
 | `TCPIP_ADDRESS` | When `TCPIP_DHCP` is `No` | The device's IPv4 address, for example `192.168.1.50`. Choose one outside the range your router hands out by DHCP. |

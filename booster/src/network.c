@@ -200,50 +200,62 @@ bool network_parseSSID(const char *ssid, char *outSSID) {
   return false;
 }
 
-// Function to parse and clean up the password string
-// of a WiFi network complying with the IEEE 802.11 standard.
-// If the password is longer than WIFI_AP_PASS_MAX_LENGTH,
-// it is truncated.
-// Returns true if valid, false otherwise.
+// Parse and clean up a WiFi password from .wificonf, its only caller.
+//
+// The copy used to be bounded by WIFI_AP_PASS_MAX_LENGTH, which sizes the
+// factory access point's own 8-character password, so every password in the
+// file was cut to its first 8 characters and any longer WPA2 password failed
+// to connect. That dates from v2.0.6beta. The bound is now the WPA2 limit of
+// 63 characters (EPIC-10 STORY-05).
+//
+// Returns true for a passphrase of 8 to 63 printable characters that is not
+// all spaces. outPassword always receives what was kept: an open network's
+// empty PASS is stored as empty, and a value longer than 63 characters keeps
+// its first 63 and is reported invalid, since no WPA2 network accepts it.
 bool network_parsePassword(const char *password, char *outPassword) {
   if (password == NULL || outPassword == NULL) {
     return false;
   }
 
   // IEEE 802.11 password rules:
-  //  - WPA2 minimum length: 8 chars (WEP: 5/13/16/29/etc)
-  //  - WPA2 maximum length: 63 bytes
+  //  - WPA/WPA2 passphrase: 8 to 63 characters
   //  - Only printable ASCII chars (0x20-0x7E) are valid
   //  - Not all spaces
 
   size_t inLen =
-      strnlen(password, WIFI_AP_PASS_MAX_LENGTH * 2);  // catch crazy input
+      strnlen(password, MAX_PASSWORD_LENGTH * 2);  // catch crazy input
   if (inLen == 0) {
     outPassword[0] = '\0';
     return false;
   }
 
-  // Clean: Copy only allowed chars up to WIFI_AP_PASS_MAX_LENGTH-1
+  // Copy only printable characters, up to the passphrase maximum. A printable
+  // character that does not fit marks the value as too long.
+  enum { PRINTABLE_FIRST = 0x20, PRINTABLE_LAST = 0x7E };
   size_t outLen = 0;
-  for (size_t i = 0; i < inLen && outLen < WIFI_AP_PASS_MAX_LENGTH - 1; ++i) {
-    char c = password[i];
-    // Only printable ASCII (0x20-0x7E)
-    if ((unsigned char)c >= 0x20 && (unsigned char)c <= 0x7E) {
-      outPassword[outLen++] = c;
+  bool tooLong = false;
+  for (size_t i = 0; i < inLen; ++i) {
+    unsigned char chr = (unsigned char)password[i];
+    if (chr < PRINTABLE_FIRST || chr > PRINTABLE_LAST) {
+      continue;
     }
+    if (outLen >= NETWORK_WPA_PASSPHRASE_MAX_LENGTH) {
+      tooLong = true;
+      break;
+    }
+    outPassword[outLen++] = (char)chr;
   }
   outPassword[outLen] = '\0';
 
-  // Check: Not empty, not all spaces, not all filtered out
-  if (outLen == 0) return false;
+  if (outLen == 0 || tooLong) {
+    return false;
+  }
   for (size_t i = 0; i < outLen; ++i) {
     if (outPassword[i] != ' ') {
-      // Ensure password length is at least 8 characters
-      if (outLen >= 8) return true;
-      return false;
+      return outLen >= NETWORK_WPA_PASSPHRASE_MIN_LENGTH;
     }
   }
-  return false;
+  return false;  // all spaces
 }
 
 // IPv4 text parsers for the .wificonf TCPIP_* block (EPIC-10, D-09). They

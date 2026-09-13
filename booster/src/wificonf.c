@@ -107,8 +107,13 @@ void wificonf_parseLine(wificonf_t *cfg, char *line) {
     char raw[MAX_PASSWORD_LENGTH * 2];
     strncpy(raw, value, sizeof(raw) - 1);
     raw[sizeof(raw) - 1] = '\0';
-    if (!network_parsePassword(raw, cfg->pass)) {
-      DPRINTF("Invalid password in %s\n", WIFICONF_FILE);
+    // An empty value is an open network, not a mistake worth a log line.
+    if (!network_parsePassword(raw, cfg->pass) && raw[0] != '\0') {
+      DPRINTF(
+          "Invalid password in %s: a WPA2 password has %d to %d "
+          "printable characters\n",
+          WIFICONF_FILE, NETWORK_WPA_PASSPHRASE_MIN_LENGTH,
+          NETWORK_WPA_PASSPHRASE_MAX_LENGTH);
     }
     cfg->pass[MAX_PASSWORD_LENGTH - 1] = '\0';
     cfg->hasPass = true;

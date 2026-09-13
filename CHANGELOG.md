@@ -15,6 +15,9 @@ Firmware only. The `.wificonf` file on the microSD card can now set a static IP 
 - The file is read more leniently. Key names work in any case, and lines starting with `#` are comments as well as lines starting with `;`.
 - The first setup page lists the `AUTH` values and shows the optional TCP/IP lines in its example file.
 
+### Fixes
+- **WiFi passwords longer than 8 characters now work in the `.wificonf` file.** The file kept only the first 8 characters of the password, so any longer password failed to connect. Every firmware version that reads the file was affected, since v2.0.6beta.
+
 ---
 
 ## v2.4.1 (2026-08-30) - release
