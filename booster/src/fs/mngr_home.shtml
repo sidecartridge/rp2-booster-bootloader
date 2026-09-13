@@ -51,6 +51,10 @@
         // The development app's fixed UUID. Only its card offers "Restore and
         // launch" (EPIC-11); the firmware refuses a restore for any other app.
         devAppUuid: '44444444-4444-4444-8444-444444444444',
+        // True only when Config has "Development - Local development only"
+        // selected. Exact match, the same rule the firmware uses for the deploy
+        // API gate (DEVAPI_DEV_CATALOG_URL), so a custom catalog URL is not it.
+        devChannelSelected: `<!--#APPSURL-->` === 'https://md-store.sidecartridge.com/atari-st/apps-dev.json',
         uuidToDowngrade: null,
         downgradeFromVersion: null,
         downgradeToVersion: null,
@@ -762,8 +766,8 @@
       <li><strong>Platform</strong>, <strong>Features</strong> and <strong>Creator</strong>: click the chips to filter the list. Combine filters to narrow the catalog.</li>
       <li><strong>Action button</strong> (Install / Update / Downgrade): installs the version selected in the dropdown, latest by default. Downgrades ask for confirmation.</li>
       <li><strong>Launch</strong>: starts an installed app. To return here later, press the <strong>SELECT</strong> button on the device and follow the on-screen instructions.</li>
-      <li><strong>Restore and launch</strong> (DEV APP only): starts the DEV APP from a clean slate. It replaces the microfirmware on the device with the version downloaded from the catalog, erases the DEV APP's saved settings and deletes the last upload.</li>
-      <li><strong>Restore config only</strong> (DEV APP only): erases the DEV APP's saved settings, so it starts with its defaults the next time it runs. The microfirmware on the device and the last upload are kept, and nothing is launched.</li>
+      <li x-show="devChannelSelected" x-cloak><strong>Restore and launch</strong> (DEV APP only): starts the DEV APP from a clean slate. It replaces the microfirmware on the device with the version downloaded from the catalog, erases the DEV APP's saved settings and deletes the last upload.</li>
+      <li x-show="devChannelSelected" x-cloak><strong>Restore config only</strong> (DEV APP only): erases the DEV APP's saved settings, so it starts with its defaults the next time it runs. The microfirmware on the device and the last upload are kept, and nothing is launched.</li>
     </ul>
     <div class="filter-group release-type-selector">
       <span class="filter-group-title">Release type</span>
