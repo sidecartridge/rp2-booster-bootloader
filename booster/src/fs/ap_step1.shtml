@@ -138,8 +138,8 @@
             <p>
                 If you opt for the '.wificonf' file mode, copy this template and substitute the parameters with your own
                 SSID, password and WiFi authentication security type. AUTH is the security type as a number: 0 for an
-                open network, 1 for WPA TKIP PSK, 5 for WPA2 AES PSK, 8 for WPA2 mixed PSK. The network list below shows
-                the security type of each network. Then reboot the device after inserting the microSD card with the
+                open network, 1 for WPA TKIP PSK, 5 for WPA2 AES PSK, 8 for WPA2 mixed PSK. Click a network in the list
+                below to see its security type. Then reboot the device after inserting the microSD card with the
                 file. It will automatically start in the management mode, bypassing the "dual QR" screen. The file is
                 read at every boot, so you can also use it later to change the settings of a configured device.
                 The device gets its address by DHCP unless you also uncomment and fill in the TCPIP lines. A static
