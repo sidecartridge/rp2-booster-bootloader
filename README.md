@@ -372,6 +372,8 @@ At the right hand side of each app, you can see the following buttons:
 ![Booster Manager Apps View 2](/docs/BOOSTER-MANAGER-APPS-2.png)
 
 - **Launch**: Launch the app. This will install the app in the flash memory of the device and after reboot it will be launched automatically. If you want to launch an app that is already installed, you can use the **Launch** button at any time.
+- **Restore and launch** (DEV APP only): Start the DEV APP from a clean slate. It replaces the microfirmware in the device with the DEV APP version downloaded from the catalog, erases the DEV APP's saved settings and deletes the last upload from the [developer deploy API](docs/DEPLOY-API.md), then launches it. It asks for confirmation first and cannot be undone.
+- **Restore config only** (DEV APP only): Erase the DEV APP's saved settings, so it starts with its default settings the next time it runs. The microfirmware in the device and the last upload are kept, and nothing is launched. It asks for confirmation and shows the result in the same dialog.
 
 On Atari ST systems, Manager mode also supports terminal-driven manual boot: press `ESC` to enter the apps workflow, or press any `SHIFT` key to continue booting from GEMDOS.
 

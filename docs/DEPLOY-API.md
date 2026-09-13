@@ -89,6 +89,27 @@ that installing the DEV APP downloads is never programmed into the slot.
 To go from uploads back to the probe, delete the DEV APP, which removes the upload, and
 install it again.
 
+### Starting again from a clean slate
+
+If a deploy leaves the device in a bad state, return to Booster and open the Apps page. The
+DEV APP card has a **Restore and launch** button. After you confirm, it:
+
+1. deletes your upload,
+2. erases the DEV APP's saved settings,
+3. writes the DEV APP version downloaded from the catalog into the microfirmware slot,
+4. launches it.
+
+Today that catalog version is a placeholder that hands control straight back to Booster, so
+a restore leaves you in Booster with nothing of yours left on the device. Upload again to
+carry on.
+
+To reset only your microfirmware's saved settings, use **Restore config only** on the same
+card instead. It erases the DEV APP's settings and nothing else: the microfirmware in the
+slot and your upload stay, and nothing is launched. Your next launch starts with default
+settings.
+
+Both restore buttons are only offered on the web page. They are not part of this API.
+
 `44444444-4444-4444-8444-444444444444` is the fixed UUID of the development app. It is not
 a placeholder for you to change.
 
@@ -147,5 +168,5 @@ cheerfully launch a binary that never uploaded.
   Structure is checked when flashing, contents are not.
 - **No arbitrary UUIDs.** Only the development app can be replaced this way. Installing
   real microfirmwares still goes through the catalog.
-- **No rollback.** Recover a bad upload by uploading a good one, or install any
-  microfirmware from the Apps page to overwrite the slot.
+- **No rollback.** Recover a bad upload by uploading a good one, or use **Restore and
+  launch** on the DEV APP card to go back to the version downloaded from the catalog.

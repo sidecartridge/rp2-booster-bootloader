@@ -2,11 +2,13 @@
 
 ## v2.4.2 (unreleased)
 
-Firmware only. The `.wificonf` file on the microSD card can now set a static IP address, and it is applied at every boot, so it can also change the network settings of a device that is already set up. For microfirmware developers, launching the DEV APP works again with a debug probe.
+Firmware only. The `.wificonf` file on the microSD card can now set a static IP address, and it is applied at every boot, so it can also change the network settings of a device that is already set up. For microfirmware developers, launching the DEV APP works again with a debug probe, and new buttons restore it from a clean slate or reset only its settings.
 
 ### New features
 - **Static IP address from the `.wificonf` file.** Add `TCPIP_DHCP=No` with `TCPIP_ADDRESS`, `TCPIP_NETMASK` and `TCPIP_GATEWAY`, and optionally `TCPIP_DNS` with one or two servers. `TCPIP_DHCP=Yes` switches back to DHCP. This is the way to set up a device on a network without a DHCP server. The format, with examples, is in [Configuring WiFi from a file](README.md#configuring-wifi-from-a-file).
 - **Malformed static settings are ignored, not applied.** The static settings are used only when address, netmask and gateway are all present and valid, and the DNS line is valid when present. Otherwise every `TCPIP_` line is ignored and the device keeps the settings it has.
+- **Restore and launch for the DEV APP.** A new button on the DEV APP card in the Apps page starts it again from a clean slate. It replaces the microfirmware in the device with the version downloaded from the catalog, erases the DEV APP's saved settings and deletes the last upload, then launches it. Use it when a deploy from your development environment leaves the device in a bad state. It asks for confirmation, and it is only available from the web page.
+- **Restore config only for the DEV APP.** A second new button on the DEV APP card erases only the DEV APP's saved settings, so it starts with its defaults the next time it runs. The microfirmware in the device and the last upload are kept, and nothing is launched.
 
 ### Changes
 - **The `.wificonf` file is applied at every boot, not only during the first setup.** Edit the file and power-cycle to change the network settings of a configured device. Flash is written only when the file differs from the stored settings.

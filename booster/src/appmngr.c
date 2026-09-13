@@ -100,6 +100,9 @@ static bool s_dir_opened = false;
 static char s_folder[256];
 static download_launch_err_t launch_status = DOWNLOAD_LAUNCHAPP_IDLE;
 static char launch_app_uuid[37] = {0};
+// Set by appmngr_schedule_restore_launch_app(), cleared by a plain schedule
+// and when the launch consumes it. Only honoured for the development app.
+static bool launch_restore = false;
 static bool download_update = false;
 
 static int appmngr_hex_nibble(char c) {
@@ -2176,7 +2179,57 @@ void appmngr_schedule_launch_app(const char *uuid) {
     launch_status = DOWNLOAD_LAUNCHAPP_SCHEDULED;
     strncpy(launch_app_uuid, uuid, sizeof(launch_app_uuid));
     launch_app_uuid[sizeof(launch_app_uuid) - 1] = '\0';
+    launch_restore = false;
   }
+}
+
+void appmngr_schedule_restore_launch_app(const char *uuid) {
+  appmngr_schedule_launch_app(uuid);
+  if (uuid) {
+    launch_restore = true;
+  }
+}
+
+appmngr_config_erase_t appmngr_erase_app_config(const char *uuid) {
+  // Not-found from the lookup is -3; -1 and -2 mean the UUID itself is bad.
+  enum { LOOKUP_SECTOR_NOT_FOUND = -3 };
+  uint8_t *table = malloc(FLASH_SECTOR_SIZE);
+  if (table == NULL) {
+    DPRINTF("Config erase: no memory to read the lookup table\n");
+    return APPMNGR_CONFIG_ERASE_FAILED;
+  }
+  uint16_t table_length = 0;
+  appmngr_load_apps_lookup_table(table, &table_length);
+  int sector = appmngr_get_lookup_table_sector(uuid, table, &table_length);
+  free(table);
+  if (sector == LOOKUP_SECTOR_NOT_FOUND) {
+    DPRINTF("Config erase: no config sector assigned to %s\n", uuid);
+    return APPMNGR_CONFIG_NOT_ASSIGNED;
+  }
+  if (sector < 0) {
+    DPRINTF("Config erase: lookup failed for %s (%d)\n", uuid, sector);
+    return APPMNGR_CONFIG_ERASE_FAILED;
+  }
+  if (appmngr_delete_config_sector((uint8_t)sector) != 0) {
+    DPRINTF("Config erase: could not erase sector %d\n", sector);
+    return APPMNGR_CONFIG_ERASE_FAILED;
+  }
+  DPRINTF("Config erase: sector %d of %s erased\n", sector, uuid);
+  return APPMNGR_CONFIG_ERASED;
+}
+
+// "Restore and launch" for the development app: remove everything a developer
+// left behind before the catalog binary is flashed. The deploy API upload is
+// deleted, or the next plain launch would flash it again and undo the restore.
+// The app's config sector is erased, so the microfirmware starts from its
+// defaults, exactly as after a fresh install.
+static void appmngr_restore_dev_app(void) {
+  char upload_filename[DEVAPI_PATH_MAX] = {0};
+  devapi_buildUploadPath(upload_filename, sizeof(upload_filename));
+  FRESULT unlinked = f_unlink(upload_filename);
+  DPRINTF("Restore: delete upload %s: %s\n", upload_filename,
+          unlinked == FR_OK ? "deleted" : "not present");
+  appmngr_erase_app_config(DEVAPI_DEV_APP_UUID);
 }
 
 download_launch_err_t appmngr_launch_app() {
@@ -2219,8 +2272,9 @@ download_launch_err_t appmngr_launch_app() {
   //  2. Deploy API upload (EPIC-05): <uuid>.dev.uf2. That file IS what the
   //     developer wants to run, so it is flashed like any other app.
   //  3. Catalog binary: <uuid>.uf2, written when the DEV APP is installed from
-  //     the Development channel, which the deploy API requires. It is the
-  //     placeholder, and it is never flashed (D-10).
+  //     the Development channel, which the deploy API requires. A plain launch
+  //     never flashes it (D-10). "Restore and launch" on the Apps page does, on
+  //     purpose, after deleting the upload and erasing the app's config.
   //
   // Uploads used to be written over <uuid>.uf2, so cases 2 and 3 looked the
   // same: from v2.3.0 to v2.4.1, launching with the DEV APP installed flashed
@@ -2230,13 +2284,20 @@ download_launch_err_t appmngr_launch_app() {
   bool flashIt = true;
   const char *flash_filename = binary_filename;
   char upload_filename[sizeof(binary_filename)] = {0};
-  if (isDevApp) {
+  if (isDevApp && launch_restore) {
+    // Restore and launch: the one deliberate exception to case 3. The
+    // developer asked for a clean slate from the web page, so the upload and
+    // the app's config go, and the catalog binary is flashed.
+    DPRINTF("Restoring the development app from the catalog binary\n");
+    appmngr_restore_dev_app();
+  } else if (isDevApp) {
     flashIt = devapi_hasUploadedBinary();
     if (flashIt) {
       devapi_buildUploadPath(upload_filename, sizeof(upload_filename));
       flash_filename = upload_filename;
     }
   }
+  launch_restore = false;
 
   if (flashIt) {
     DPRINTF("Copying app binary %s to flash memory\n", flash_filename);

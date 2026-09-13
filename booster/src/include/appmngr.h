@@ -361,6 +361,35 @@ void appmngr_set_launch_status(download_launch_err_t status);
 download_catalog_err_t appmngr_create_app_catalog();
 void appmngr_schedule_launch_app(const char *uuid);
 
+/**
+ * @brief Schedule "Restore and launch" for the development app (EPIC-11).
+ *
+ * Like appmngr_schedule_launch_app(), but when the launch runs it first
+ * deletes the deploy API upload and erases the development app's config
+ * sector, then flashes the binary downloaded from the catalog, even though a
+ * plain launch of the development app never flashes that binary (D-10). It
+ * gives a developer a clean slate after a bad deploy. The web page is the
+ * only caller, and it only ever passes DEVAPI_DEV_APP_UUID.
+ */
+void appmngr_schedule_restore_launch_app(const char *uuid);
+
+typedef enum {
+  APPMNGR_CONFIG_ERASED = 0,    // the app's config sector was erased
+  APPMNGR_CONFIG_NOT_ASSIGNED,  // no sector in the lookup table: nothing to do
+  APPMNGR_CONFIG_ERASE_FAILED   // lookup table unreadable, or erase refused
+} appmngr_config_erase_t;
+
+/**
+ * @brief Erase an installed app's config sector, so the microfirmware starts
+ * from its defaults the next time it runs (EPIC-11).
+ *
+ * The lookup table entry stays: the sector remains assigned to the app. Used
+ * by "Restore and launch" and "Restore config only" for the development app.
+ * Parks core 1 and disables interrupts around the erase, like every other
+ * config write.
+ */
+appmngr_config_erase_t appmngr_erase_app_config(const char *uuid);
+
 void appmngr_print_apps_lookup_table(uint8_t *table, uint16_t length);
 void appmngr_load_apps_lookup_table(uint8_t *table, uint16_t *length);
 int8_t appmngr_erase_app_lookup_table();

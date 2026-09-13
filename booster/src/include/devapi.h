@@ -149,6 +149,14 @@ devapi_err_t devapi_uploadFinish(bool commit);
 bool devapi_hasUploadedBinary(void);
 
 /**
+ * @brief Is the binary downloaded from the catalog for the development app on
+ * the card, and not empty?
+ *
+ * "Restore and launch" flashes that file, so it refuses when it is missing.
+ */
+bool devapi_hasCatalogBinary(void);
+
+/**
  * @brief Path of the development app's upload file,
  * "<apps folder>/<DEVAPI_DEV_APP_UUID>DEVAPI_UPLOAD_EXTENSION".
  *

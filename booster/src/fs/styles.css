@@ -589,6 +589,9 @@ ul.device-tags li {
   display: none !important; 
 }
 
+/* Every .modal is hidden here, and only the dialogs listed below by their
+   x-show variable are allowed to appear. A new dialog must be added to this
+   list, or Alpine opens it and it stays invisible: the button looks dead. */
 .modal {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -602,6 +605,12 @@ ul.device-tags li {
   display: flex;
 }
 .modal[x-show="showLaunchModal"] {
+  display: flex;
+}
+.modal[x-show="showRestoreModal"] {
+  display: flex;
+}
+.modal[x-show="showRestoreConfigModal"] {
   display: flex;
 }
 .modal[x-show="showDowngradeModal"] {

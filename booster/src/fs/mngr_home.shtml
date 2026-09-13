@@ -38,9 +38,19 @@
         loaded_apps: false,
         showDeleteModal: false,
         showLaunchModal: false,
+        showRestoreModal: false,
+        showRestoreConfigModal: false,
         showDowngradeModal: false,
         uuidToDelete: null,
         uuidToLaunch: null,
+        uuidToRestore: null,
+        uuidToRestoreConfig: null,
+        restoreConfigBusy: false,
+        restoreConfigOk: false,
+        restoreConfigResult: '',
+        // The development app's fixed UUID. Only its card offers "Restore and
+        // launch" (EPIC-11); the firmware refuses a restore for any other app.
+        devAppUuid: '44444444-4444-4444-8444-444444444444',
         uuidToDowngrade: null,
         downgradeFromVersion: null,
         downgradeToVersion: null,
@@ -626,6 +636,59 @@
           }
         },
 
+        // Confirm "Restore and launch" for the DEV APP
+        confirmRestore(uuid) {
+          this.uuidToRestore = uuid;
+          this.showRestoreModal = true;
+        },
+
+        // If the user confirms, restore the DEV APP from the catalog and launch it
+        restoreNow() {
+          if (this.uuidToRestore) {
+            window.location = `/mngr_restoreapp.cgi?uuid=${encodeURIComponent(this.uuidToRestore)}`;
+          }
+        },
+
+        // Confirm "Restore config only" for the DEV APP
+        confirmRestoreConfig(uuid) {
+          this.uuidToRestoreConfig = uuid;
+          this.restoreConfigBusy = false;
+          this.restoreConfigOk = false;
+          this.restoreConfigResult = '';
+          this.showRestoreConfigModal = true;
+        },
+
+        // Erase the DEV APP settings in place and show the result in the dialog.
+        // Stays on this page: nothing is launched.
+        restoreConfigNow() {
+          if (!this.uuidToRestoreConfig || this.restoreConfigBusy) {
+            return;
+          }
+          this.restoreConfigBusy = true;
+          fetch(`/mngr_restoreconfig.cgi?uuid=${encodeURIComponent(this.uuidToRestoreConfig)}`)
+            .then(res => res.text())
+            .then(text => {
+              let json;
+              try {
+                json = JSON.parse(text);
+              } catch (e) {
+                this.restoreConfigOk = false;
+                this.restoreConfigResult = 'The device sent an unexpected response.';
+                return;
+              }
+              this.restoreConfigOk = json.status === 200;
+              const message = String(json.message || '').trim();
+              this.restoreConfigResult = message || (this.restoreConfigOk ? 'Done.' : 'Unknown error.');
+            })
+            .catch(err => {
+              this.restoreConfigOk = false;
+              this.restoreConfigResult = `Could not reach the device: ${err.message}`;
+            })
+            .finally(() => {
+              this.restoreConfigBusy = false;
+            });
+        },
+
       };
     }
   </script>
@@ -699,6 +762,8 @@
       <li><strong>Platform</strong>, <strong>Features</strong> and <strong>Creator</strong>: click the chips to filter the list. Combine filters to narrow the catalog.</li>
       <li><strong>Action button</strong> (Install / Update / Downgrade): installs the version selected in the dropdown, latest by default. Downgrades ask for confirmation.</li>
       <li><strong>Launch</strong>: starts an installed app. To return here later, press the <strong>SELECT</strong> button on the device and follow the on-screen instructions.</li>
+      <li><strong>Restore and launch</strong> (DEV APP only): starts the DEV APP from a clean slate. It replaces the microfirmware on the device with the version downloaded from the catalog, erases the DEV APP's saved settings and deletes the last upload.</li>
+      <li><strong>Restore config only</strong> (DEV APP only): erases the DEV APP's saved settings, so it starts with its defaults the next time it runs. The microfirmware on the device and the last upload are kept, and nothing is launched.</li>
     </ul>
     <div class="filter-group release-type-selector">
       <span class="filter-group-title">Release type</span>
@@ -929,6 +994,18 @@
               Launch
             </button>
 
+            <!-- Restore and launch: DEV APP only, and only once installed -->
+            <button class="pure-button" x-show="app.installed && app.uuid === devAppUuid"
+                    @click="confirmRestore(app.uuid)">
+              Restore and launch
+            </button>
+
+            <!-- Restore config only: DEV APP only, and only once installed -->
+            <button class="pure-button" x-show="app.installed && app.uuid === devAppUuid"
+                    @click="confirmRestoreConfig(app.uuid)">
+              Restore config only
+            </button>
+
             <!-- Delete button: only visible if installed is true -->
             <button class="pure-button button-delete" x-show="app.installed" @click="confirmRemove(app.uuid)">
               Delete
@@ -982,6 +1059,62 @@
             Yes, Downgrade
           </button>
           <button class="pure-button" @click="showDowngradeModal=false">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Restore config only for the DEV APP (hidden by default). Its x-show name
+         is allowlisted in styles.css, like every dialog. -->
+    <div class="modal" x-show="showRestoreConfigModal" x-cloak x-transition>
+      <div class="modal-overlay" @click="if (!restoreConfigBusy) showRestoreConfigModal = false"></div>
+
+      <div class="modal-content">
+        <h3>Restore the DEV APP settings</h3>
+        <template x-if="!restoreConfigResult">
+          <div>
+            <p>This erases the DEV APP's saved settings. It starts with its default settings the next time it runs.</p>
+            <p>The microfirmware on the device and your last upload are kept, and nothing is launched. This cannot be undone.</p>
+            <div class="modal-buttons">
+              <button class="pure-button pure-button-primary" @click="restoreConfigNow()" :disabled="restoreConfigBusy"
+                      x-text="restoreConfigBusy ? 'Erasing' : 'Yes, erase the settings'"></button>
+              <button class="pure-button" @click="showRestoreConfigModal = false" :disabled="restoreConfigBusy">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </template>
+        <template x-if="restoreConfigResult">
+          <div>
+            <p x-text="restoreConfigResult"></p>
+            <div class="modal-buttons">
+              <button class="pure-button pure-button-primary" @click="showRestoreConfigModal = false">OK</button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Restore and launch confirmation for the DEV APP (hidden by default) -->
+    <div class="modal" x-show="showRestoreModal" x-cloak x-transition>
+      <div class="modal-overlay" @click="showRestoreModal = false"></div>
+
+      <div class="modal-content">
+        <h3>Restore and launch the DEV APP</h3>
+        <p>This starts the DEV APP again from a clean slate. It:</p>
+        <ul>
+          <li>replaces the microfirmware on the device with the DEV APP version downloaded from the catalog,</li>
+          <li>erases the DEV APP's saved settings,</li>
+          <li>deletes your last upload.</li>
+        </ul>
+        <p>This cannot be undone. If your computer does not reset automatically, please reset it manually.</p>
+
+        <div class="modal-buttons">
+          <button class="pure-button pure-button-primary" @click="restoreNow()">
+            Yes, restore and launch
+          </button>
+          <button class="pure-button" @click="showRestoreModal = false">
             Cancel
           </button>
         </div>

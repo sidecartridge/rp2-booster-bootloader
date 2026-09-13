@@ -79,6 +79,19 @@ bool devapi_isEnabled(void) {
   return devapi_isDevChannelSelected() && devapi_isDevAppInstalled();
 }
 
+bool devapi_hasCatalogBinary(void) {
+  if (!appmngr_get_sdcard_info()->ready) {
+    return false;
+  }
+  char path[DEVAPI_PATH_MAX] = {0};
+  devapi_buildDevAppPath(path, sizeof(path), ".uf2");
+  FILINFO info = {0};
+  if (f_stat(path, &info) != FR_OK || info.fsize == 0) {
+    return false;
+  }
+  return true;
+}
+
 void devapi_buildUploadPath(char *out, size_t outSize) {
   devapi_buildDevAppPath(out, outSize, DEVAPI_UPLOAD_EXTENSION);
 }
