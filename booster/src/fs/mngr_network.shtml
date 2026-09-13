@@ -23,6 +23,13 @@
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 
   <script>
+    // /.wificonf on the microSD card re-applies the WiFi network and the TCP/IP
+    // settings at every boot (EPIC-10). While it is there those two sections
+    // are read-only here, and the firmware refuses their saves as well. The
+    // value comes from the firmware's own file check, not from anything the
+    // page infers.
+    const WIFICONF_LOCKED = '<!--#WIFICONF-->' === 'Yes';
+
     // ========== Shared Utilities ==========
     function stripLabelAndPlaceholder(items) {
       return items.map(entry => {
@@ -41,6 +48,7 @@
         showErrorModal: false,
         errorTitle: '',
         errorMessage: '',
+        wificonfLocked: WIFICONF_LOCKED,
         showInfo(title, msg) {
           this.infoTitle = title;
           this.infoMessage = msg;
@@ -191,6 +199,7 @@
           return {
             params: [],
             originalParams: [],
+            locked: WIFICONF_LOCKED,
             showInfo: showInfoCallback,
             showError: showErrorCallback,
             init() {
@@ -204,6 +213,10 @@
             },
 
             save() {
+              if (this.locked) {
+                this.showError('Read-only', 'A .wificonf file on the microSD card takes precedence over the TCP/IP configuration.');
+                return;
+              }
               console.log('Saving TCP/IP parameters:', this.params);
 
               const jsonStr = JSON.stringify(stripLabelAndPlaceholder(this.params));
@@ -255,6 +268,7 @@
         wifiList() {
           return {
             wifis: [],
+            locked: WIFICONF_LOCKED,
             sortKey: 'name', // default initial sort column
             sortAsc: true,   // ascending by default
 
@@ -328,6 +342,9 @@
 
             // Clicking a row calls connect to navigate
             connect(net) {
+              if (this.locked) {
+                return;
+              }
               // net.SSID => network SSID
               // net.AUTH => the auth value
               window.location.href = `/mngr_connect.shtml?name=${encodeURIComponent(net.SSID)}&auth=${encodeURIComponent(net.AUTH)}`;
@@ -395,6 +412,18 @@
         Anyone on this network can install and run code on it. To turn it off, switch the
         release catalog away from Development on the <a href="/mngr_config.shtml">Config</a>
         page, or delete the DEV APP.
+      </span>
+    </div>
+    <!-- /.wificonf present. Not dismissible for the same reason as DEVMODE: it
+         describes a standing state, and the sections below stay read-only for
+         as long as it holds. -->
+    <div class="banner banner-warning" x-show="wificonfLocked" x-cloak>
+      <i class="fas fa-lock banner-icon"></i>
+      <span>
+        <strong>Managed by .wificonf.</strong><br>
+        A <code>.wificonf</code> file on the microSD card
+        takes precedence over the TCP/IP configuration and the WiFi network, so they are read-only
+        here. Remove or rename the file and reboot the device to change them on this page.
       </span>
     </div>
     <h2>Wifi configuration</h2>
@@ -479,10 +508,11 @@
 
     <!-- TCP/IP Configuration Section -->
     <h2>TCP/IP configuration</h2>
-    <p>Manage your TCP/IP network settings here.</p>
+    <p x-show="!wificonfLocked">Manage your TCP/IP network settings here.</p>
+    <p x-show="wificonfLocked" x-cloak>Read-only while a .wificonf file is on the microSD card.</p>
 
     <div class="params-container" x-data="networkManager().tcpipConfig(showInfo, showError)" x-init="init()"
-      style="margin-bottom: 2rem;">
+      :class="{ locked: locked }" style="margin-bottom: 2rem;">
       <!-- 1) The WIFI_DHCP parameter: user picks Yes/No -->
       <!-- Display only the FIRST parameter named WIFI_DHCP -->
       <template x-for="(param, index) in params.filter(p => p.name === 'WIFI_DHCP').slice(0, 1)" :key="index">
@@ -493,7 +523,7 @@
           </div>
           <!-- Combo (Yes/No) -->
           <div class="pure-u-1 pure-u-md-2-3">
-            <select class="pure-input-1" x-model="param.value">
+            <select class="pure-input-1" x-model="param.value" :disabled="locked">
               <option value="Yes">Yes</option>
               <option value="No">No</option>
             </select>
@@ -516,13 +546,13 @@
               <!-- STRING type -->
               <template x-if="param.type === 'STRING'">
                 <input type="text" class="pure-input-1" :placeholder="param.placeholder || ''" maxlength="128"
-                  x-model="param.value" />
+                  x-model="param.value" :disabled="locked" />
               </template>
 
               <!-- INT type -->
               <template x-if="param.type === 'INT'">
                 <input type="number" class="pure-input-1" :placeholder="param.placeholder || ''" min="0" max="65535"
-                  x-model="param.value" @input="
+                  x-model="param.value" :disabled="locked" @input="
                     let raw = $event.target.value;
                     let val = parseInt(raw, 10);
                     if (isNaN(val)) val = 0;
@@ -534,7 +564,7 @@
 
               <!-- BOOL type -->
               <template x-if="param.type === 'BOOL'">
-                <select class="pure-input-1" x-model="param.value">
+                <select class="pure-input-1" x-model="param.value" :disabled="locked">
                   <option value="Yes">Yes</option>
                   <option value="No">No</option>
                 </select>
@@ -546,16 +576,17 @@
 
       <!-- TCP/IP Save & Cancel Buttons -->
       <div style="margin-top: 1rem;">
-        <button class="pure-button pure-button-primary" @click="save">Save</button>
-        <button class="pure-button" @click="cancel">Cancel</button>
+        <button class="pure-button pure-button-primary" @click="save" :disabled="locked">Save</button>
+        <button class="pure-button" @click="cancel" :disabled="locked">Cancel</button>
       </div>
     </div>
 
     <h2>Network list</h2>
-    <p>Click on a network to connect.</p>
+    <p x-show="!wificonfLocked">Click on a network to connect.</p>
+    <p x-show="wificonfLocked" x-cloak>Read-only while a .wificonf file is on the microSD card.</p>
 
     <!-- Network List Section -->
-    <div x-data="networkManager().wifiList()" x-init="init()">
+    <div x-data="networkManager().wifiList()" x-init="init()" :class="{ locked: locked }">
 
       <!-- Table of Wi-Fi networks -->
       <table class="pure-table pure-table-bordered" style="margin-top: 1rem;">
@@ -571,7 +602,7 @@
         <tbody>
           <!-- Display each network row -->
           <template x-for="(net, index) in wifis" :key="net.SSID + index">
-            <tr style="cursor: pointer;" @click="connect(net)">
+            <tr :style="locked ? 'cursor: not-allowed;' : 'cursor: pointer;'" @click="connect(net)">
               <td x-text="net.SSID"></td>
               <td x-text="net.BSSID"></td>
               <td x-text="net.RSSI"></td>

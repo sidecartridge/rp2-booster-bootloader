@@ -226,6 +226,7 @@ static const char *ssi_tags[] = {
     "WRSS",      // 48 - WiFi RSSI
     "MACADDR",   // 49 - Device MAC address
     "WSIGNAL",   // 50 - Live WiFi signal strength
+    "WIFICONF",  // 51 - /.wificonf on the SD card locks the Network page
 };
 
 /**
@@ -307,6 +308,30 @@ const char *cgi_download(int iIndex, int iNumParams, char *pcParam[],
   }
 }
 
+// True while /.wificonf is on the card. The file re-applies the WiFi network
+// and the TCP/IP settings at every boot (EPIC-10), so those are read-only on
+// the Network page and their saves are refused in cgi_saveparams: a change
+// made here would only last until the next reboot.
+static bool mngr_httpd_wificonfLocks(void) {
+  if (!appmngr_get_sdcard_info()->ready) {
+    return false;
+  }
+  return wificonf_isPresent();
+}
+
+// The settings keys /.wificonf owns.
+static bool mngr_httpd_isWificonfKey(const char *name) {
+  static const char *const keys[] = {
+      PARAM_WIFI_SSID, PARAM_WIFI_PASSWORD, PARAM_WIFI_AUTH,    PARAM_WIFI_DHCP,
+      PARAM_WIFI_IP,   PARAM_WIFI_NETMASK,  PARAM_WIFI_GATEWAY, PARAM_WIFI_DNS};
+  for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+    if (strcmp(name, keys[i]) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * @brief Update the given params with the new values
  *
@@ -351,6 +376,28 @@ const char *cgi_saveparams(int iIndex, int iNumParams, char *pcParam[],
                    "Error parsing JSON");
           valid_json = false;
         } else {
+          // Refuse the keys /.wificonf owns while the file is on the card,
+          // before anything is applied, so a mixed payload changes nothing
+          // rather than half of itself. The page grays these out, but the
+          // firmware is the one that has to say no.
+          if (mngr_httpd_wificonfLocks()) {
+            cJSON *lockedItem = NULL;
+            cJSON_ArrayForEach(lockedItem, root) {
+              cJSON *lockedName = cJSON_GetObjectItem(lockedItem, "name");
+              if (cJSON_IsString(lockedName) &&
+                  mngr_httpd_isWificonfKey(lockedName->valuestring)) {
+                DPRINTF("Refusing %s: %s takes precedence\n",
+                        lockedName->valuestring, WIFICONF_FILE);
+                response_status = MNGR_HTTPD_RESPONSE_BAD_REQUEST;
+                snprintf(
+                    httpd_response_message, sizeof(httpd_response_message),
+                    "A .wificonf file on the microSD card takes precedence. "
+                    "Remove or rename it and reboot to change this here.");
+                cJSON_Delete(root);
+                return "/response.shtml";
+              }
+            }
+          }
           // Iterate over the JSON array
           cJSON *item = NULL;
           cJSON_ArrayForEach(item, root) {
@@ -1076,6 +1123,17 @@ static u16_t ssi_handler(int iIndex, char *pcInsert, int iInsertLen
       } else {
         printed = snprintf(pcInsert, iInsertLen, "N/A");
       }
+      break;
+    }
+    case 51: /* WIFICONF */
+    {
+      // Same rule as DEVMODE: report the firmware's own check, so the page
+      // grays out exactly what cgi_saveparams will refuse.
+      const char *lockedText = "No";
+      if (mngr_httpd_wificonfLocks()) {
+        lockedText = "Yes";
+      }
+      printed = snprintf(pcInsert, iInsertLen, "%s", lockedText);
       break;
     }
     case 21: /* DLSTAT - download progress, polled by downloading.shtml */
