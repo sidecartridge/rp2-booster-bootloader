@@ -2,7 +2,7 @@
 
 ## v2.4.2 (unreleased)
 
-Firmware only. The `.wificonf` file on the microSD card can now set a static IP address, and it is applied at every boot, so it can also change the network settings of a device that is already set up.
+Firmware only. The `.wificonf` file on the microSD card can now set a static IP address, and it is applied at every boot, so it can also change the network settings of a device that is already set up. For microfirmware developers, launching the DEV APP works again with a debug probe.
 
 ### New features
 - **Static IP address from the `.wificonf` file.** Add `TCPIP_DHCP=No` with `TCPIP_ADDRESS`, `TCPIP_NETMASK` and `TCPIP_GATEWAY`, and optionally `TCPIP_DNS` with one or two servers. `TCPIP_DHCP=Yes` switches back to DHCP. This is the way to set up a device on a network without a DHCP server. The format, with examples, is in [Configuring WiFi from a file](README.md#configuring-wifi-from-a-file).
@@ -17,6 +17,7 @@ Firmware only. The `.wificonf` file on the microSD card can now set a static IP 
 
 ### Fixes
 - **WiFi passwords longer than 8 characters now work in the `.wificonf` file.** The file kept only the first 8 characters of the password, so any longer password failed to connect. Every firmware version that reads the file was affected, since v2.0.6beta.
+- **Launching the DEV APP no longer overwrites a microfirmware flashed with a debug probe.** Since v2.3.0, launching the DEV APP after installing it from the Development catalog wrote the catalog's placeholder into the microfirmware slot, and the device came straight back to Booster. The placeholder is never flashed now. Uploads from the developer deploy API are kept in their own file on the microSD card, so upload your microfirmware again after updating: an upload made with an older version is not launched.
 
 ---
 

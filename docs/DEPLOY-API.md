@@ -33,7 +33,8 @@ the ground truth: if it is not there, the API is not answering.
 ### Turning it off
 
 Either switch the release catalog to something other than Development, or delete the DEV
-APP from the Apps page. Either one closes the gate immediately.
+APP from the Apps page. Either one closes the gate immediately. Deleting the DEV APP also
+deletes your upload.
 
 > **If your uploads suddenly stop working, check the channel.** Switching to Stable or Beta
 > to look something up disables the API until you switch back. This is deliberate, and it
@@ -55,14 +56,16 @@ curl --fail --data-binary @build/myapp.uf2 \
      "http://sidecart.local/dev_upload.cgi"
 ```
 
-The body is written to the SD card as the development app's `.uf2`. Nothing is flashed yet.
+The body is written to the SD card as `/apps/44444444-4444-4444-8444-444444444444.dev.uf2`,
+next to the DEV APP's own files. Nothing is flashed yet.
 
 Send a real `Content-Length` — `curl --data-binary` does. The firmware compares it against
 what actually arrives and **refuses to commit a short transfer**, so a dropped connection
 leaves your previous binary intact rather than a truncated one that would brick the
 microfirmware slot on the next launch.
 
-The upload replaces the previous one. There is no versioning and no undo.
+The upload replaces the previous one. There is no versioning and no undo. Reinstalling the
+DEV APP from the catalog keeps your upload.
 
 ### Launch
 
@@ -74,9 +77,17 @@ GET /mngr_launchapp.cgi?uuid=44444444-4444-4444-8444-444444444444
 curl --fail "http://sidecart.local/mngr_launchapp.cgi?uuid=44444444-4444-4444-8444-444444444444"
 ```
 
-This programs the uploaded `.uf2` into the microfirmware slot and reboots into it. The
-device drops off the network while it does so; that is the microfirmware taking over, not a
-failure.
+With an upload on the card, this programs it into the microfirmware slot and reboots into
+it. The device drops off the network while it does so. That is the microfirmware taking
+over, not a failure.
+
+Without an upload, launching leaves the microfirmware slot untouched and boots whatever is
+already in it. That is the debug probe workflow: flash your microfirmware with the probe,
+then launch the DEV APP from the Apps page or with the call above. The placeholder binary
+that installing the DEV APP downloads is never programmed into the slot.
+
+To go from uploads back to the probe, delete the DEV APP, which removes the upload, and
+install it again.
 
 `44444444-4444-4444-8444-444444444444` is the fixed UUID of the development app. It is not
 a placeholder for you to change.
@@ -125,13 +136,15 @@ cheerfully launch a binary that never uploaded.
 | Worked before, fails now | You almost certainly changed the release catalog. Switch it back |
 | Upload refused immediately on a large file | The `.uf2` is bigger than the microfirmware slot allows |
 | Upload appears to work, launch runs the old binary | The transfer was short and was rejected rather than committed. Check `curl` exited 0 |
+| Launch overwrites the microfirmware you flashed with the probe | An upload is still on the card, and it is flashed at every launch. Delete the DEV APP and install it again to remove it |
+| After updating Booster to v2.4.2, launch runs the old microfirmware instead of your upload | Uploads made with v2.3.0 to v2.4.1 were stored under the catalog binary's name, which is no longer flashed. Upload again |
 | Nothing responds at `sidecart.local` | mDNS. Use the IP address shown on the Atari screen |
 
 ## What this does not do
 
-- **No integrity check.** The MD5 in the catalog describes the placeholder binary you
-  replaced, so there is nothing to verify an uploaded file against. Structure is checked
-  when flashing, contents are not.
+- **No integrity check.** The MD5 in the catalog describes the DEV APP's placeholder
+  binary, not your upload, so there is nothing to verify an uploaded file against.
+  Structure is checked when flashing, contents are not.
 - **No arbitrary UUIDs.** Only the development app can be replaced this way. Installing
   real microfirmwares still goes through the catalog.
 - **No rollback.** Recover a bad upload by uploading a good one, or install any

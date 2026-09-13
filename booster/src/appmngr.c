@@ -2125,6 +2125,16 @@ download_delete_err_t appmngr_delete_app(const char *uuid) {
   f_unlink(json_filename);
   f_unlink(binary_filename);
 
+  // The development app can also have a deploy API upload beside its catalog
+  // binary (D-10). Deleting the app is the documented way back to the probe
+  // workflow, so the upload goes too.
+  if (strcmp(uuid, DEVAPI_DEV_APP_UUID) == 0) {
+    char upload_filename[sizeof(binary_filename)] = {0};
+    devapi_buildUploadPath(upload_filename, sizeof(upload_filename));
+    DPRINTF("Deleting development upload %s\n", upload_filename);
+    f_unlink(upload_filename);
+  }
+
   // Now delete the entry in the app lookup table
   uint8_t *table = malloc(FLASH_SECTOR_SIZE);
   if (table == NULL) {
@@ -2200,24 +2210,38 @@ download_launch_err_t appmngr_launch_app() {
            settings_find_entry(gconfig_getContext(), PARAM_APPS_FOLDER)->value,
            launch_app_uuid);
 
-  // The development app (magic UUID 44444444-4444-4444-8444-444444444444) is
-  // normally launched WITHOUT copying anything to flash: the developer put the
-  // binary in the microfirmware slot themselves, with a debug probe or the
-  // USB/BOOTSEL dance, and overwriting it would destroy exactly what they
-  // wanted to run.
+  // The development app (magic UUID 44444444-4444-4444-8444-444444444444) can
+  // have three binaries, and at most one of them may be flashed:
   //
-  // The deploy API (EPIC-05) adds a third way to get a binary there. When it
-  // has uploaded a .uf2, that file IS what the developer wants to run, so it
-  // must be flashed like any other app. When it has not, the old behaviour has
-  // to hold exactly as before -- that is the probe workflow, and breaking it
-  // would trade one group of developers for another.
+  //  1. Probe workflow: the developer put the microfirmware in the slot
+  //     themselves, with a debug probe or the USB/BOOTSEL dance. Launching must
+  //     leave the slot alone, or it destroys exactly what they wanted to run.
+  //  2. Deploy API upload (EPIC-05): <uuid>.dev.uf2. That file IS what the
+  //     developer wants to run, so it is flashed like any other app.
+  //  3. Catalog binary: <uuid>.uf2, written when the DEV APP is installed from
+  //     the Development channel, which the deploy API requires. It is the
+  //     placeholder, and it is never flashed (D-10).
+  //
+  // Uploads used to be written over <uuid>.uf2, so cases 2 and 3 looked the
+  // same: from v2.3.0 to v2.4.1, launching with the DEV APP installed flashed
+  // the placeholder over a probe-flashed microfirmware, and the placeholder
+  // handed straight back to Booster (EPIC-11).
   bool isDevApp = strcmp(launch_app_uuid, DEVAPI_DEV_APP_UUID) == 0;
-  bool flashIt = !isDevApp || devapi_hasUploadedBinary();
+  bool flashIt = true;
+  const char *flash_filename = binary_filename;
+  char upload_filename[sizeof(binary_filename)] = {0};
+  if (isDevApp) {
+    flashIt = devapi_hasUploadedBinary();
+    if (flashIt) {
+      devapi_buildUploadPath(upload_filename, sizeof(upload_filename));
+      flash_filename = upload_filename;
+    }
+  }
 
   if (flashIt) {
-    DPRINTF("Copying app binary to flash memory\n");
+    DPRINTF("Copying app binary %s to flash memory\n", flash_filename);
     int res = storeUF2FileToFlash(
-        binary_filename, (uint32_t)&_storage_flash_start,
+        flash_filename, (uint32_t)&_storage_flash_start,
         (uint32_t)&__flash_binary_start - (uint32_t)&_storage_flash_start,
         APP_FLASH_COPY_CHUNK_SIZE);
   } else {

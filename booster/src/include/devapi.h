@@ -51,11 +51,24 @@
 /**
  * @brief The development microfirmware's fixed UUID.
  *
- * appmngr.c special-cases this UUID on launch: it does not copy the .uf2 to
- * flash, because historically the binary got there by debug probe or BOOTSEL.
- * This API is the third way.
+ * appmngr.c special-cases this UUID on launch. The catalog's <uuid>.uf2 is
+ * never copied to flash: it is the placeholder, and the real binary got into
+ * the slot by debug probe or BOOTSEL. The one exception is an upload from
+ * this API, which lives in its own file (DEVAPI_UPLOAD_EXTENSION).
  */
 #define DEVAPI_DEV_APP_UUID "44444444-4444-4444-8444-444444444444"
+
+/**
+ * @brief Suffix of the uploaded binary, beside the app's own .json and .uf2.
+ *
+ * Uploads used to be renamed over <uuid>.uf2, the file installing the DEV APP
+ * from the catalog writes. The two could not be told apart, so launching with
+ * the DEV APP installed flashed the catalog placeholder over a probe-flashed
+ * microfirmware (EPIC-11, D-10). A name of its own keeps the upload and the
+ * placeholder distinct, and a catalog reinstall, which only replaces the .json
+ * and the .uf2, leaves the upload alone.
+ */
+#define DEVAPI_UPLOAD_EXTENSION ".dev.uf2"
 
 /**
  * @brief The only catalog URL that opens the gate.
@@ -73,6 +86,9 @@
 
 /** @brief Temporary name an in-flight upload is written under. */
 #define DEVAPI_UPLOAD_TMP_NAME "devupl.tmp"
+
+/** @brief Buffer size for an apps folder path, as appmngr uses everywhere. */
+#define DEVAPI_PATH_MAX 256
 
 typedef enum {
   DEVAPI_OK = 0,
@@ -115,8 +131,9 @@ devapi_err_t devapi_uploadData(struct pbuf *p);
 /**
  * @brief Finish an upload.
  *
- * On success the temporary file is renamed over the development app's .uf2,
- * so a transfer that dies midway can never leave something flashable behind.
+ * On success the temporary file is renamed over the development app's upload
+ * file (DEVAPI_UPLOAD_EXTENSION), so a transfer that dies midway can never
+ * leave something flashable behind.
  *
  * @param commit false to abandon the transfer and delete the temporary file.
  */
@@ -126,9 +143,18 @@ devapi_err_t devapi_uploadFinish(bool commit);
  * @brief Has a .uf2 been uploaded for the development app?
  *
  * Used by the launch path to decide whether to program flash or to leave the
- * slot alone for a developer working with a debug probe.
+ * slot alone for a developer working with a debug probe. Only the upload file
+ * counts; the catalog's .uf2 never does.
  */
 bool devapi_hasUploadedBinary(void);
+
+/**
+ * @brief Path of the development app's upload file,
+ * "<apps folder>/<DEVAPI_DEV_APP_UUID>DEVAPI_UPLOAD_EXTENSION".
+ *
+ * The launch path flashes this file, and deleting the app removes it.
+ */
+void devapi_buildUploadPath(char *out, size_t outSize);
 
 /**
  * @brief Bytes received by the last completed upload. Diagnostics only.
