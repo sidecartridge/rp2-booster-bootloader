@@ -86,6 +86,22 @@ int mngr_init() {
             appmngr_get_sdcard_info()->apps_folder_found ? "true" : "false");
   }
 
+  // Apply /.wificonf when the card carries one (EPIC-10). This runs before
+  // WiFi starts, so the values take effect on this boot without a reboot,
+  // and flash is written only when something changed, so a card that keeps
+  // the file does not cost a flash write per boot.
+  if (appmngr_get_sdcard_info()->ready) {
+    wificonf_t wificonf;
+    if (wificonf_readFile(&wificonf)) {
+      if (wificonf_applySettings(&wificonf)) {
+        DPRINTF("Settings changed by %s. Saving\n", WIFICONF_FILE);
+        settings_save(gconfig_getContext(), true);
+      } else {
+        DPRINTF("%s matches the stored settings\n", WIFICONF_FILE);
+      }
+    }
+  }
+
   // Deinit the network
   DPRINTF("Deinitializing the network\n");
   network_deInit();

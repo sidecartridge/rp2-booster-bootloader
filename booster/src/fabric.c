@@ -11,18 +11,13 @@
 
 static int wait_for_reboot = 2;
 static int wait_poll_interval_ms = 1000;
-static fabric_config_t fabric_config = {"", "", 0, false};
+static fabric_config_t fabric_config = {0};
 static bool page_served = false;
 
-static void saveWifiParams() {
-  // Save the parameters
-  DPRINTF("Store all the parameters needed to start the BOOSTER in STA mode\n");
-  settings_put_string(gconfig_getContext(), PARAM_WIFI_SSID,
-                      fabric_config.ssid);
-  settings_put_string(gconfig_getContext(), PARAM_WIFI_PASSWORD,
-                      fabric_config.pass);
-  settings_put_integer(gconfig_getContext(), PARAM_WIFI_AUTH,
-                       fabric_config.auth);
+// Store the mode and the boot feature that put Booster into Manager mode on
+// the next boot, persist everything, and reboot. Shared by the two ways of
+// getting WiFi credentials in factory mode: the web form and .wificonf.
+static void fabric_saveAndReboot(void) {
   settings_put_integer(gconfig_getContext(), PARAM_WIFI_MODE, WIFI_MODE_STA);
   settings_put_string(gconfig_getContext(), PARAM_BOOT_FEATURE, "BOOSTER");
   settings_save(gconfig_getContext(), true);
@@ -33,6 +28,18 @@ static void saveWifiParams() {
   // Send the reboot command
   SEND_COMMAND_TO_DISPLAY(DISPLAY_COMMAND_RESET);
   reset_device();
+}
+
+static void saveWifiParams() {
+  // Save the parameters
+  DPRINTF("Store all the parameters needed to start the BOOSTER in STA mode\n");
+  settings_put_string(gconfig_getContext(), PARAM_WIFI_SSID,
+                      fabric_config.ssid);
+  settings_put_string(gconfig_getContext(), PARAM_WIFI_PASSWORD,
+                      fabric_config.pass);
+  settings_put_integer(gconfig_getContext(), PARAM_WIFI_AUTH,
+                       fabric_config.auth);
+  fabric_saveAndReboot();
 }
 
 /**
@@ -116,50 +123,12 @@ int fabric_init() {
   }
 
   if (scardInitialized) {
-    // Check for the WiFi configuration file
-    // Check if the WiFi configuration file exists .wificonf
-    // Use FatFS to check if the file exists
-    // Review and fixes for WiFi config parse
-
-    FIL file;
-    FRESULT res = f_open(&file, WIFI_CONFIG_FILE, FA_READ);
-    if (res == FR_OK) {
-      // File exists, read the configuration
-      char line[WIFI_CONFIG_LINE_MAX];
-      while (f_gets(line, sizeof(line), &file)) {
-        // Trim trailing newline/carriage return
-        size_t len = strlen(line);
-        while (len > 0 && (line[len - 1] == '\n' || line[len - 1] == '\r')) {
-          line[--len] = '\0';
-        }
-
-        // Parse the line for SSID, password, and auth type
-        if (strncmp(line, SSID_PREFIX, PREFIX_LEN) == 0) {
-          // SSID: skip leading/trailing whitespace
-          char raw[MAX_SSID_LENGTH * 2];
-          strncpy(raw, line + PREFIX_LEN, sizeof(raw) - 1);
-          raw[sizeof(raw) - 1] = '\0';
-          bool valid = network_parseSSID(raw, fabric_config.ssid);
-          if (!valid) {
-            DPRINTF("Invalid SSID in config\n");
-          }
-          fabric_config.ssid[MAX_SSID_LENGTH - 1] = '\0';
-
-        } else if (strncmp(line, PASS_PREFIX, PREFIX_LEN) == 0) {
-          char raw[MAX_PASSWORD_LENGTH * 2];
-          strncpy(raw, line + PREFIX_LEN, sizeof(raw) - 1);
-          raw[sizeof(raw) - 1] = '\0';
-          bool valid = network_parsePassword(raw, fabric_config.pass);
-          if (!valid) {
-            DPRINTF("Invalid password in config\n");
-          }
-          fabric_config.pass[MAX_PASSWORD_LENGTH - 1] = '\0';
-
-        } else if (strncmp(line, AUTH_PREFIX, PREFIX_LEN) == 0) {
-          fabric_config.auth = atoi(line + PREFIX_LEN);
-        }
-      }
-      f_close(&file);
+    // The .wificonf file, when present, is the configuration (EPIC-10). It
+    // goes straight into the settings; Manager mode reads the same file on
+    // its own boots, see mngr_init().
+    wificonf_t wificonf;
+    if (wificonf_readFile(&wificonf)) {
+      wificonf_applySettings(&wificonf);
       fabric_config.is_set = true;
       DPRINTF("WiFi configuration loaded from SD card\n");
     } else {
@@ -183,9 +152,9 @@ int fabric_init() {
     fabric_httpd_start((fabric_httpd_callback_t)fabric_set_config,
                        (fabric_httpd_served_callback_t)fabric_served_callback);
   } else {
-    DPRINTF("Network configuration found: SSID: %s, Pass: %s, Auth: %i\n",
-            fabric_config.ssid, fabric_config.pass, fabric_config.auth);
-    saveWifiParams();
+    DPRINTF("Network configuration found in %s. Saving and rebooting\n",
+            WIFICONF_FILE);
+    fabric_saveAndReboot();
   }
   return 0;
 }

@@ -27,15 +27,11 @@
 #include "pico/stdlib.h"
 #include "reset.h"
 #include "sdcard.h"
+#include "wificonf.h"
 
-// Macro definitions for literals and numeric constants
-#define WIFI_CONFIG_FILE ".wificonf"
-#define WIFI_CONFIG_LINE_MAX 128
-#define SSID_PREFIX "SSID="
-#define PASS_PREFIX "PASS="
-#define AUTH_PREFIX "AUTH="
-#define PREFIX_LEN 5  // Length of "XXX=" prefixes
-
+// Credentials collected by the factory web form. The .wificonf path does
+// not go through this struct any more: wificonf.c applies the file straight
+// into the settings (EPIC-10).
 typedef struct {
   char ssid[MAX_SSID_LENGTH];
   char pass[MAX_PASSWORD_LENGTH];
