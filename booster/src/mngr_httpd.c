@@ -575,6 +575,114 @@ const char *cgi_launchapp(int iIndex, int iNumParams, char *pcParam[],
 }
 
 /**
+ * @brief "Restore and launch" the development app (EPIC-11).
+ *
+ * Deletes the deploy API upload, erases the development app's config and
+ * flashes the binary downloaded from the catalog, then launches it: a clean
+ * slate after a bad deploy. Only the Apps page calls this, for the DEV APP
+ * card. It is deliberately not part of the documented deploy API.
+ *
+ * Refused for any other UUID, and when the catalog binary is missing, because
+ * the restore would then have nothing to write. Both checks happen here so the
+ * page gets an error instead of a launch that cannot do what was asked.
+ */
+const char *cgi_restoreapp(int iIndex, int iNumParams, char *pcParam[],
+                           char *pcValue[]) {
+  DPRINTF("cgi_restoreapp called with index %d\n", iIndex);
+  enum { RESTORE_ERROR_URL_SIZE = 160 };
+  static char error_url[RESTORE_ERROR_URL_SIZE];
+  for (int i = 0; i < iNumParams; i++) {
+    if (strcmp(pcParam[i], "uuid") != 0) {
+      continue;
+    }
+    if (strcmp(pcValue[i], DEVAPI_DEV_APP_UUID) != 0) {
+      DPRINTF("Restore refused for %s: not the development app\n", pcValue[i]);
+      snprintf(error_url, sizeof(error_url),
+               "/error.shtml?error=%d&error_msg=Only%%20the%%20DEV%%20APP%%20"
+               "can%%20be%%20restored",
+               DOWNLOAD_LAUNCHAPP_NOTUUID_ERROR);
+      return error_url;
+    }
+    if (!appmngr_get_sdcard_info()->ready) {
+      DPRINTF("Restore refused: SD card not ready\n");
+      snprintf(error_url, sizeof(error_url),
+               "/error.shtml?error=%d&error_msg=SD%%20card%%20not%%20ready",
+               DOWNLOAD_LAUNCHAPP_SDCARDNOTREADY_ERROR);
+      return error_url;
+    }
+    if (!devapi_hasCatalogBinary()) {
+      // No launch error code describes this; 0 is the generic one, as in
+      // cgi_launchapp. The message carries the meaning.
+      DPRINTF("Restore refused: the DEV APP catalog binary is missing\n");
+      snprintf(error_url, sizeof(error_url),
+               "/error.shtml?error=0&error_msg=The%%20DEV%%20APP%%20binary%%20"
+               "is%%20missing.%%20Install%%20the%%20DEV%%20APP%%20again");
+      return error_url;
+    }
+    DPRINTF("Restore and launch scheduled for %s\n", pcValue[i]);
+    appmngr_schedule_restore_launch_app(pcValue[i]);
+    return "/launching.html";
+  }
+  snprintf(error_url, sizeof(error_url),
+           "/error.shtml?error=%d&error_msg=Missing%%20uuid",
+           DOWNLOAD_LAUNCHAPP_NOTUUID_ERROR);
+  return error_url;
+}
+
+/**
+ * @brief "Restore config only" for the development app (EPIC-11).
+ *
+ * Erases the development app's config sector and nothing else: the
+ * microfirmware in the slot and the deploy API upload stay, and nothing is
+ * launched. Answers with JSON through /response.shtml so the Apps page can show
+ * the result in its dialog. Only the Apps page calls it.
+ *
+ * The erase runs here, in the web server's context, the way cgi_saveparams
+ * saves settings: appmngr_delete_config_sector() parks core 1 and disables
+ * interrupts around it.
+ */
+const char *cgi_restoreconfig(int iIndex, int iNumParams, char *pcParam[],
+                              char *pcValue[]) {
+  DPRINTF("cgi_restoreconfig called with index %d\n", iIndex);
+  response_status = MNGR_HTTPD_RESPONSE_BAD_REQUEST;
+  snprintf(httpd_response_message, sizeof(httpd_response_message),
+           "Missing uuid");
+  for (int i = 0; i < iNumParams; i++) {
+    if (strcmp(pcParam[i], "uuid") != 0) {
+      continue;
+    }
+    if (strcmp(pcValue[i], DEVAPI_DEV_APP_UUID) != 0) {
+      DPRINTF("Config restore refused for %s: not the development app\n",
+              pcValue[i]);
+      snprintf(httpd_response_message, sizeof(httpd_response_message),
+               "Only the DEV APP settings can be restored");
+      return "/response.shtml";
+    }
+    switch (appmngr_erase_app_config(pcValue[i])) {
+      case APPMNGR_CONFIG_ERASED:
+        response_status = MNGR_HTTPD_RESPONSE_OK;
+        snprintf(httpd_response_message, sizeof(httpd_response_message),
+                 "DEV APP settings erased. It starts with its default "
+                 "settings the next time it runs.");
+        break;
+      case APPMNGR_CONFIG_NOT_ASSIGNED:
+        response_status = MNGR_HTTPD_RESPONSE_OK;
+        snprintf(httpd_response_message, sizeof(httpd_response_message),
+                 "The DEV APP has no saved settings to erase.");
+        break;
+      case APPMNGR_CONFIG_ERASE_FAILED:
+      default:
+        response_status = MNGR_HTTPD_RESPONSE_INTERNAL_SERVER_ERROR;
+        snprintf(httpd_response_message, sizeof(httpd_response_message),
+                 "Could not erase the DEV APP settings.");
+        break;
+    }
+    return "/response.shtml";
+  }
+  return "/response.shtml";
+}
+
+/**
  * @brief Reboot the device
  *
  *
@@ -697,6 +805,8 @@ static const tCGI cgi_handlers[] = {
     {"/mngr_fsnext.cgi", cgi_fsnext},
     {"/mngr_deleteapp.cgi", cgi_deleteapp},
     {"/mngr_launchapp.cgi", cgi_launchapp},
+    {"/mngr_restoreapp.cgi", cgi_restoreapp},
+    {"/mngr_restoreconfig.cgi", cgi_restoreconfig},
     {"/firmware_upgrade_start.cgi", cgi_firmware_upgrade_start},
     {"/firmware_upgrade_downloaded.cgi", cgi_firmware_upgrade_downloaded},
     {"/firmware_upgrade_confirm.cgi", cgi_firmware_upgrade_confirm},

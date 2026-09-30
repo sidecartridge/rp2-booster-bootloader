@@ -79,14 +79,34 @@ bool devapi_isEnabled(void) {
   return devapi_isDevChannelSelected() && devapi_isDevAppInstalled();
 }
 
+bool devapi_hasCatalogBinary(void) {
+  if (!appmngr_get_sdcard_info()->ready) {
+    return false;
+  }
+  char path[DEVAPI_PATH_MAX] = {0};
+  devapi_buildDevAppPath(path, sizeof(path), ".uf2");
+  FILINFO info = {0};
+  if (f_stat(path, &info) != FR_OK || info.fsize == 0) {
+    return false;
+  }
+  return true;
+}
+
+void devapi_buildUploadPath(char *out, size_t outSize) {
+  devapi_buildDevAppPath(out, outSize, DEVAPI_UPLOAD_EXTENSION);
+}
+
 bool devapi_hasUploadedBinary(void) {
   if (!appmngr_get_sdcard_info()->ready) {
     return false;
   }
-  char path[256] = {0};
-  devapi_buildDevAppPath(path, sizeof(path), ".uf2");
+  char path[DEVAPI_PATH_MAX] = {0};
+  devapi_buildUploadPath(path, sizeof(path));
   FILINFO info = {0};
-  return (f_stat(path, &info) == FR_OK) && (info.fsize > 0);
+  if (f_stat(path, &info) != FR_OK || info.fsize == 0) {
+    return false;
+  }
+  return true;
 }
 
 uint32_t devapi_lastUploadSize(void) { return lastUploadBytes; }
@@ -183,12 +203,12 @@ devapi_err_t devapi_uploadFinish(bool commit) {
     return (commit && !complete) ? DEVAPI_WRITE_ERROR : DEVAPI_OK;
   }
 
-  // Rename last. Until this succeeds the real .uf2 is untouched, so a failed
-  // upload leaves the previous binary in place rather than a partial file.
-  // Same shape as the firmware upgrade's tmp.download -> upgrade.uf2
-  // (appmngr.c:2143).
+  // Rename last. Until this succeeds the previous upload is untouched, so a
+  // failed upload leaves it in place rather than a partial file. Same shape
+  // as the firmware upgrade's tmp.download -> upgrade.uf2. The target is the
+  // upload file, never the catalog's <uuid>.uf2 (D-10).
   char finalPath[256] = {0};
-  devapi_buildDevAppPath(finalPath, sizeof(finalPath), ".uf2");
+  devapi_buildUploadPath(finalPath, sizeof(finalPath));
   f_unlink(finalPath);
   FRESULT res = f_rename(tmpPath, finalPath);
   if (res != FR_OK) {

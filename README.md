@@ -17,10 +17,16 @@ This is an advanced second-stage bootloader for the Raspberry Pi Pico W and the 
   Store and manage files on a micro SD card, allowing apps to use external storage or turn the device into a file server.  
 
 - **Catalog Filters in the Apps View**  
-  Narrow the public app catalog dynamically with Platform and Features filters so it is easier to find the right microfirmware.  
+  Narrow the app catalog with Release type, Platform, Features and Creator filters so it is easier to find the right microfirmware.  
 
 - **Catalog Channel Selector**  
-  Switch between the **Stable** and **Beta** catalogs from the Apps page with a single click. Pick **Development** or a fully custom URL from the Config page when you need it.  
+  Choose the catalog on the Config page: **Stable** for tested releases (the default), **Testing** for unstable releases, **Development** for microfirmware developers, or a custom catalog URL.  
+
+- **WiFi Setup from the microSD Card**  
+  A `.wificonf` file sets the WiFi network and, optionally, a static IP address. It is applied at every boot, so it can also change the settings of a device that is already set up. See [Configuring WiFi from a file](#configuring-wifi-from-a-file).  
+
+- **Tools for Microfirmware Developers**  
+  With the Development catalog selected and the DEV APP installed, push a microfirmware over WiFi with the [deploy API](docs/DEPLOY-API.md), run one flashed with a debug probe, and restore the DEV APP or reset its settings from the Apps page. See [DEV APP: tools for microfirmware developers](#dev-app-tools-for-microfirmware-developers).  
 
 - **Per-App Version Selector**  
   Pick which version of a microfirmware to install. The latest is selected by default, but when the publisher exposes prior versions in the catalog you can roll back or pin to a known-good build, with a confirmation step for downgrades.  
@@ -352,7 +358,7 @@ The **Apps view** shows:
 - The list of installed apps on the device.
 - The list of apps that are not installed but are available on the microSD card.
 
-This view is the default view when you access the web interface. At the top of the page a **Catalog channel** chip lets you switch between the **Stable** and **Beta** catalogs — clicking a channel saves the change and reloads the page. Below it, the **Platform** and **Features** filters let you narrow the catalog dynamically. While the catalog is being fetched, a loading indicator is shown.
+This view is the default view when you access the web interface. It lists the catalog selected on the [Device view](#device-view). At the top of the page, the **Release type** chips (**All**, **Stable**, **Beta**) filter the list already loaded, without changing the catalog, and the **Platform**, **Features** and **Creator** chips narrow it further. While the catalog is being fetched, a loading indicator is shown.
 
 ![Booster Manager Apps View 1](/docs/BOOSTER-MANAGER-APPS-1.png)
 
@@ -372,6 +378,7 @@ At the right hand side of each app, you can see the following buttons:
 ![Booster Manager Apps View 2](/docs/BOOSTER-MANAGER-APPS-2.png)
 
 - **Launch**: Launch the app. This will install the app in the flash memory of the device and after reboot it will be launched automatically. If you want to launch an app that is already installed, you can use the **Launch** button at any time.
+- **Restore and launch** and **Restore config only**: Shown only on the DEV APP card. See [DEV APP: tools for microfirmware developers](#dev-app-tools-for-microfirmware-developers).
 
 On Atari ST systems, Manager mode also supports terminal-driven manual boot: press `ESC` to enter the apps workflow, or press any `SHIFT` key to continue booting from GEMDOS.
 
@@ -382,6 +389,19 @@ When launching an app, the computer screen will show a message indicating that t
 The Booster microfirmware app is now installed in the flash memory of the device, and every time you power on the device, it will automatically launch the app. 
 
 To return to the Booster app, the user needs to use the command menu on the microfirmware app to do it, or press the SELECT button for more than 10 seconds and then power off and power on the device and the computer.
+
+#### DEV APP: tools for microfirmware developers
+
+The **DEV APP** is the entry for a microfirmware you are writing. It uses a fixed UUID, `44444444-4444-4444-8444-444444444444`, reserved for development. To use it, select **Development - Local development only** as the apps catalog on the [Device view](#device-view), then install **DEV APP** from the Apps view like any other app. While the Development catalog is selected, the help at the top of the Apps view also describes its restore buttons.
+
+The DEV APP card offers these actions:
+
+- **Launch**: Runs your latest upload from the [developer deploy API](docs/DEPLOY-API.md), if there is one. Without an upload it leaves the microfirmware slot untouched, so a microfirmware you flashed with a debug probe runs as flashed. The binary that installing the DEV APP downloads is a placeholder and is never flashed by **Launch**.
+- **Restore and launch**: Starts the DEV APP from a clean slate. It deletes your last upload, erases the DEV APP's saved settings, writes the DEV APP version downloaded from the catalog into the microfirmware slot, and launches it. Today that version is a placeholder that hands control straight back to Booster. It asks for confirmation first and cannot be undone.
+- **Restore config only**: Erases the DEV APP's saved settings, so your microfirmware starts with its default settings the next time it runs. The microfirmware in the slot and your upload are kept, and nothing is launched. It asks for confirmation and shows the result in the same dialog.
+- **Delete**: Removes the DEV APP from the microSD card, including your upload. Reinstalling the DEV APP from the catalog keeps an existing upload.
+
+The restore buttons are only on the web page. They are not part of the deploy API, which is described in [docs/DEPLOY-API.md](docs/DEPLOY-API.md).
 
 ### WiFi view
 
@@ -416,7 +436,7 @@ The **Device view** shows the device information and some basic configuration op
 ![Booster Manager Device View](/docs/BOOSTER-MANAGER-CONFIG-1.png)
 
 - **Apps folder**: The folder where the apps are stored. By default is `/apps`. This folder is created on the microSD card when the Booster app is launched for the first time if it does not exist.
-- **Apps catalog URL**: Pick the catalog channel — **Stable**, **Beta**, or **Development** — or choose **Custom apps catalog URL** to enter your own. The default is the Stable channel (`http://atarist.sidecartridge.com/apps.json`). The Stable and Beta channels are also reachable as a one-click chip on the Apps page.
+- **Apps catalog URL**: The catalog the Apps view loads. Choose **Stable - Tested release** (the default), **Testing - unstable releases**, **Development - Local development only**, or **Custom catalog URL** to enter your own. The three channels are served from `https://md-store.sidecartridge.com/atari-st/`. Microfirmware developers need **Development**: it lists the DEV APP and, once the DEV APP is installed, enables the [deploy API](docs/DEPLOY-API.md).
 - **Boot feature**: The UUID of the microfirmware app to load at boot time, or the Booster factory path. If the configured app cannot be found in flash memory, Booster falls back to **Manager mode**.
 - **SD card baud rate (KB)**: The baud rate of the SD card. By default is `12500`. It can be safely increased to `25000`. Above this value, the SD card may not work properly or the value will be ignored.
 
