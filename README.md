@@ -3,7 +3,7 @@
 ![Discord](https://img.shields.io/discord/1160868666162823218?style=flat&label=Discord&link=https%3A%2F%2Fdiscord.com%2Finvite%2Fu73QP9MEYC)
 
 
-This is an advanced second-stage bootloader for the Raspberry Pi Pico W and the SidecarTridge Multidevice board. The current 2.1.x series targets the RP2040-based Pico W and focuses on a web-based Manager, Atari ST terminal integration, OTA updates, and resilient offline-safe boot flows.  
+This is an advanced second-stage bootloader for the Raspberry Pi Pico W and the SidecarTridge Multidevice board. The current 2.4.x series targets the RP2040-based Pico W and focuses on a web-based Manager, Atari ST terminal integration, OTA updates, and resilient offline-safe boot flows.  
 
 ## Key Features  
 
@@ -342,7 +342,7 @@ The file is applied at every boot, so while it is on the card it decides the WiF
 
 In **Manager mode**, the Booster app tries to connect to your configured WiFi network and then connects to the public repository of microfirmware apps.
 
-If your DHCP network supports `.local` name resolution, you can access the web interface using `http://sidecart.local`. Otherwise, use the IP address assigned by your DHCP server and shown on the Atari ST screen.
+If your network supports `.local` name resolution, you can access the web interface using `http://sidecart.local`. Otherwise, use the IP address shown on the Atari ST screen: the one assigned by your DHCP server, or the static address set on the [Network view](#network-view) or in a [`.wificonf` file](#configuring-wifi-from-a-file).
 
 If WiFi retries are exhausted, Booster falls back to an **offline Manager mode**. In that state network features are disabled, but the Atari ST terminal remains available so you can still boot already-downloaded microfirmwares manually.
 
@@ -358,7 +358,7 @@ The **Apps view** shows:
 - The list of installed apps on the device.
 - The list of apps that are not installed but are available on the microSD card.
 
-This view is the default view when you access the web interface. It lists the catalog selected on the [Device view](#device-view). At the top of the page, the **Release type** chips (**All**, **Stable**, **Beta**) filter the list already loaded, without changing the catalog, and the **Platform**, **Features** and **Creator** chips narrow it further. While the catalog is being fetched, a loading indicator is shown.
+This view is the default view when you access the web interface. It lists the catalog selected on the [Config view](#config-view). At the top of the page, the **Release type** chips (**All**, **Stable**, **Beta**) filter the list already loaded, without changing the catalog, and the **Platform**, **Features** and **Creator** chips narrow it further. While the catalog is being fetched, a loading indicator is shown.
 
 ![Booster Manager Apps View 1](/docs/BOOSTER-MANAGER-APPS-1.png)
 
@@ -392,7 +392,7 @@ To return to the Booster app, the user needs to use the command menu on the micr
 
 #### DEV APP: tools for microfirmware developers
 
-The **DEV APP** is the entry for a microfirmware you are writing. It uses a fixed UUID, `44444444-4444-4444-8444-444444444444`, reserved for development. To use it, select **Development - Local development only** as the apps catalog on the [Device view](#device-view), then install **DEV APP** from the Apps view like any other app. While the Development catalog is selected, the help at the top of the Apps view also describes its restore buttons.
+The **DEV APP** is the entry for a microfirmware you are writing. It uses a fixed UUID, `44444444-4444-4444-8444-444444444444`, reserved for development. To use it, select **Development - Local development only** as the apps catalog on the [Config view](#config-view), then install **DEV APP** from the Apps view like any other app. While the Development catalog is selected, the help at the top of the Apps view also describes its restore buttons.
 
 The DEV APP card offers these actions:
 
@@ -403,9 +403,9 @@ The DEV APP card offers these actions:
 
 The restore buttons are only on the web page. They are not part of the deploy API, which is described in [docs/DEPLOY-API.md](docs/DEPLOY-API.md).
 
-### WiFi view
+### Network view
 
-The **WiFi view** shows the list of available WiFi networks and permits some basic network configuration options:
+The **Network view** shows the list of available WiFi networks and permits some basic network configuration options:
 
 ![Booster Manager WiFi View](/docs/BOOSTER-MANAGER-WIFI-1.png)
 
@@ -429,9 +429,9 @@ The Booster app will save the WiFi credentials to flash memory and reboot. It wi
 
 > **Note**: If Booster cannot connect to the configured WiFi network, it stays in offline Manager mode. To restore the WiFi factory defaults and configure the network again, hold the SELECT button for more than ten seconds and then power-cycle the device and computer.
 
-### Device view
+### Config view
 
-The **Device view** shows the device information and some basic configuration options:
+The **Config view** shows the device information and some basic configuration options:
 
 ![Booster Manager Device View](/docs/BOOSTER-MANAGER-CONFIG-1.png)
 
