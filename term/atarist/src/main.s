@@ -33,6 +33,22 @@ BYTES_ROW_HIGH		equ 80		; 80 bytes per row in the ST
 PRE_RESET_WAIT		equ $FFFFF
 TRANSTABLE			equ $FA1000	; Translation table for high resolution
 
+; XBIOS Getrez results. The screen is drawn in ST low or ST high only: any
+; other resolution on a colour monitor is switched to ST low while the screen
+; is shown, and back when the boot continues.
+REZ_ST_LOW			equ 0
+REZ_ST_HIGH			equ 2
+REZ_FALCON			equ 3		; A Falcon mode that is not ST compatible (see below)
+REZ_TT_HIGH			equ 6		; Mono monitor: it cannot show ST low
+
+; A TT's internal speaker is switched off while the screen is shown, and put
+; back as TOS had it when the boot continues. Setting bit 6 of the YM's I/O
+; port A switches it off; TOS leaves the bit clear, with the speaker on.
+; Only on a TT: other machines use that bit for something else.
+MCH_TT				equ 2		; _MCH cookie high word on a TT
+YM_PORT_A			equ 14		; YM register: I/O port A
+YM_TT_SPEAKER_OFF	equ $40		; Port A bit 6: set, the TT's internal speaker is off
+
 ; If 1, the display will not use the framebuffer and will write directly to the
 ; display memory. This is useful to reduce the memory usage in the rp2040
 ; When not using the framebuffer, the endianess swap must be done in the atari ST
@@ -96,6 +112,63 @@ get_screen_base		macro
 					move.w #2,-(sp)
 					trap #14
 					addq.l #2,sp
+					endm
+
+; XBIOS Setscreen, resolution only: both screen addresses stay as they are.
+; \1 is the resolution, \2 the Falcon mode, read only when \1 is 3.
+set_rez				macro
+					move.w \2,-(sp)			; Falcon mode
+					move.w \1,-(sp)			; Resolution
+					move.l #-1,-(sp)		; Physical screen unchanged
+					move.l #-1,-(sp)		; Logical screen unchanged
+					move.w #5,-(sp)			; XBIOS Setscreen
+					trap #14
+					lea 14(sp),sp
+					endm
+
+; XBIOS VsetMode(-1), Falcon only
+; Return the current video mode in D0
+get_falcon_mode		macro
+					move.w #-1,-(sp)
+					move.w #88,-(sp)
+					trap #14
+					addq.l #4,sp
+					endm
+
+; XBIOS Giaccess, read
+; Return YM register \1 in D0
+read_ym				macro
+					move.w \1,-(sp)			; Register number, bit 7 clear: read
+					clr.w -(sp)				; Data, unused for a read
+					move.w #28,-(sp)
+					trap #14
+					addq.l #6,sp
+					endm
+
+; XBIOS Offgibit and Ongibit: AND or OR YM port A with \1, interrupts masked
+port_a_and			macro
+					move.w \1,-(sp)
+					move.w #29,-(sp)
+					trap #14
+					addq.l #4,sp
+					endm
+
+port_a_or			macro
+					move.w \1,-(sp)
+					move.w #30,-(sp)
+					trap #14
+					addq.l #4,sp
+					endm
+
+; Switch a TT's speaker back on if TOS had it on. D7 holds port A as TOS left
+; it, or -1 when this is not a TT.
+speaker_restore		macro
+					tst.w d7
+					bmi.s .\@done				; Not a TT
+					btst #6, d7
+					bne.s .\@done				; TOS had it off
+					port_a_and #~YM_TT_SPEAKER_OFF&$FF
+.\@done:
 					endm
 
 ; Check the left or right shift key. If pressed, exit.
@@ -185,7 +258,7 @@ pre_auto:
 	lea SCREEN_SIZE(a2), a2		; Move to the end of the screen memory
 	move.l a2, a3				; Save the screen memory address in A3
 	; Copy the code out of the ROM to avoid unstable behavior
-    move.l #end_rom_code - start_rom_code, d6
+    move.l #end_rom_code - start_rom_code + 3, d6	; Copied in longs: round up
     lea start_rom_code, a1    ; a1 points to the start of the code in ROM
     lsr.w #2, d6
     subq #1, d6
@@ -201,10 +274,53 @@ start_rom_code:
 ; Enable bconin to return shift key status
 	or.b #%1000, _conterm.w
 
+; On a TT, switch the internal speaker off. d7 keeps port A as TOS left it,
+; to put the speaker back when the boot continues, or -1 when this is not
+; a TT. d7 survives the TOS calls, and send_sync saves it.
+	moveq #-1, d7
+	move.l #'_MCH', d1
+	bsr find_cookie
+	swap d0
+	cmp.w #MCH_TT, d0
+	bne.s .speaker_done
+	read_ym #YM_PORT_A
+	moveq #0, d7
+	move.b d0, d7				; Port A as TOS left it
+	port_a_or #YM_TT_SPEAKER_OFF
+.speaker_done:
+
 ; Get the resolution of the screen
 	get_rez
-	cmp.w #2, d0				; Check if the resolution is 640x400 (high resolution)
+	move.w d0, d3				; Keep it: d3 survives the TOS calls
+
+; On a Falcon, Getrez only describes the ST compatible modes: in 640x480 in 16
+; colours it says ST high. Any other Falcon mode counts as REZ_FALCON, and the
+; exact mode is kept in a4 to put it back.
+	move.l #'_VDO', d1
+	bsr find_cookie
+	swap d0
+	cmp.w #3, d0				; $0003xxxx: Falcon video
+	bne.s .rez_known
+	get_falcon_mode
+	move.w d0, a4				; Remember the Falcon mode
+	btst #7, d0					; An ST compatible mode: Getrez is right
+	bne.s .rez_known
+	moveq #REZ_FALCON, d3
+.rez_known:
+	move.w d3, d0
+
+	move.w #-1, a5				; Resolution to restore in boot_gem: none yet
+	cmp.w #REZ_ST_HIGH, d0		; Check if the resolution is 640x400 (high resolution)
 	beq .print_loop_high		; If it is, print the message in high resolution
+	tst.w d0					; ST low is drawn as it is
+	beq.s .print_loop_low
+	cmp.w #REZ_TT_HIGH, d0		; TT high is left alone: its mono monitor cannot show ST low
+	beq.s .print_loop_low
+
+; Any other resolution (ST medium, TT medium, TT low, a Falcon mode) is
+; switched to ST low. a4 and a5 survive the TOS calls and nothing here uses them.
+	move.w d0, a5				; Remember the resolution
+	set_rez #REZ_ST_LOW, #0
 
 .print_loop_low:
 	vsync_wait
@@ -275,6 +391,7 @@ start_rom_code:
 	bra .print_loop_high		; Continue printing the message
 	
 .reset:
+	speaker_restore				; The TT speaker back before the reset too
     move.l #PRE_RESET_WAIT, d6
 .wait_me:
     subq.l #1, d6           ; Decrement the outer loop
@@ -289,7 +406,32 @@ start_rom_code:
 
 boot_gem:
 	; If we get here, continue loading GEM
+	; with the TT speaker as TOS had it
+	speaker_restore
+	; in the resolution TOS started in, if the screen was switched to ST low
+	cmpa.w #-1, a5
+	beq.s .rez_unchanged
+	set_rez a5, a4
+.rez_unchanged:
     rts
+
+; Look a cookie up in the jar. d1 is its name. Return its value in d0, or 0
+; when there is no jar or no such cookie. Clobbers a0.
+find_cookie:
+	move.l _p_cookies.w, d0
+	beq.s .cookie_done			; No cookie jar
+	move.l d0, a0
+.cookie_next:
+	move.l (a0)+, d0			; Cookie name, 0 at the end of the jar
+	beq.s .cookie_done
+	cmp.l d1, d0
+	beq.s .cookie_found
+	addq.l #4, a0				; Skip the cookie value
+	bra.s .cookie_next
+.cookie_found:
+	move.l (a0), d0
+.cookie_done:
+	rts
 
 ; Shared functions included at the end of the file
 ; Don't forget to include the macros for the shared functions at the top of file
