@@ -155,7 +155,7 @@ Install the required dependencies:
 - Python 3
 - GCC ARM embedded toolchain (`arm-none-eabi-*`)
 - Perl, which the Booster build uses to pack the web pages into the firmware. The build stops if it is missing
-- `stcmd` tooling for the embedded Atari ST terminal firmware
+- `stcmd` from [AtariST Toolkit Docker](https://github.com/sidecartridge/atarist-toolkit-docker) v1.5.0, for the embedded Atari ST terminal firmware. CI installs it with `curl -sL https://github.com/sidecartridge/atarist-toolkit-docker/releases/download/v1.5.0/install_atarist_toolkit_docker.sh | bash -s 1.5.0`, which pins the image to `1.5.0` instead of `latest`
 
 The root `version.txt` file defines the release string and is copied into the subprojects by the build scripts.
 
